@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "tsc && node dist/test_api.js"
+    "test": "tsc && node dist/test_api.js",
+    "test:e2e": "tsc && node dist/test_e2e_integration.js"
   },
   "keywords": [],
   "author": "",

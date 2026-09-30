@@ -96,7 +96,7 @@ export const ReportPage: React.FC = () => {
               </h3>
             </div>
             <div className="divide-y divide-slate-100">
-              {Object.entries(report.moduleCoverage).map(([key, cov]) => (
+              {Object.entries(report.moduleCoverage).map(([key, cov]: [string, any]) => (
                 <ModuleCoverageRow
                   key={key}
                   label={MODULE_LABELS[key] ?? key}

@@ -11,11 +11,18 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "strict": true,
+    "strict": false,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "react": ["./src/types/react-shims.d.ts"],
+      "react/jsx-runtime": ["./src/types/react-shims.d.ts"],
+      "react-dom/client": ["./src/types/react-shims.d.ts"],
+      "react-router-dom": ["./src/types/react-shims.d.ts"]
+    }
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src"]
 }

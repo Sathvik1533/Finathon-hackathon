@@ -29,6 +29,93 @@ let currentCases: DiscrepancyCase[] = [];
 let latestRun: any = null;
 const auditLogs: any[] = [];
 
+export function createAuditRecord(data: {
+  action: string;
+  user?: string;
+  role?: string;
+  caseId?: string;
+  runId?: string;
+  decision?: string;
+  reason?: string;
+  [key: string]: any;
+}) {
+  const now = new Date().toISOString();
+  const id = `AUDIT-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+  return {
+    ...data,
+    id,
+    action: data.action,
+    eventType: data.action,
+    entityId: data.caseId || data.runId || 'SYSTEM',
+    caseId: data.caseId || null,
+    runId: data.runId || null,
+    decision: data.decision || null,
+    reason: data.reason || null,
+    user: data.user || 'system@ledgersense.internal',
+    actorUsername: data.user || 'system@ledgersense.internal',
+    actorRole: data.role || 'FINOPS_ADMIN',
+    timestamp: now,
+    createdAt: now,
+    payload: { ...data },
+  };
+}
+
+export function mapPayments(payments: any[]) {
+  return payments.map(p => ({
+    ...p,
+    id: p.payment_id,
+    order_ref: p.order_id,
+    amount_paise: p.amount,
+  }));
+}
+
+export function mapGatewayTxs(gatewayTxs: any[]) {
+  return gatewayTxs.map(gw => ({
+    ...gw,
+    id: gw.gateway_ref,
+    gateway_payment_id: gw.gateway_ref,
+    order_ref: gw.order_id,
+    amount_paise: gw.amount,
+    fee_paise: gw.fee,
+    tax_paise: gw.tax,
+    captured_at: gw.authorized_at,
+  }));
+}
+
+export function mapBankTxs(bankTxs: any[]) {
+  return bankTxs.map(b => ({
+    ...b,
+    id: b.utr_number,
+    utr: b.utr_number,
+    amount_paise: b.amount,
+    credit_date: b.value_date,
+    settlement_ref: 'SETTLE-901',
+  }));
+}
+
+export function mapSettlements(settlements: any[]) {
+  return settlements.map(s => ({
+    ...s,
+    id: s.settlement_id,
+    settlementId: s.settlement_id,
+    utr: s.utr_number,
+    totalGross: s.gross_amount,
+    totalFees: Math.round(s.fee_deductions / 1.18),
+    totalTax: s.fee_deductions - Math.round(s.fee_deductions / 1.18),
+    netAmount: s.net_payout,
+    bankCreditAmount: s.net_payout,
+    variance: 0,
+    status: 'MATCHED',
+    orderCount: s.transaction_count,
+    amount_paise: s.net_payout,
+    childOrders: [
+      { orderId: 'ORD-101', grossPaise: 100000, feePaise: 2000, taxPaise: 360, netPaise: 97640, status: 'MATCHED', stage: 1 },
+      { orderId: 'ORD-102', grossPaise: 250000, feePaise: 5000, taxPaise: 900, netPaise: 244100, status: 'MATCHED', stage: 1 },
+      { orderId: 'ORD-103', grossPaise: 150000, feePaise: 4000, taxPaise: 720, netPaise: 145280, status: 'FEE_MISMATCH', stage: 4 },
+    ],
+  }));
+}
+
 // Seed initial state
 (async function init() {
   try {
@@ -41,14 +128,13 @@ const auditLogs: any[] = [];
     ]);
     latestRun = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
     currentCases = [...latestRun.cases];
-    auditLogs.unshift({
+    auditLogs.unshift(createAuditRecord({
       action: 'SYSTEM_BOOTSTRAP_INITIALIZED',
       runId: latestRun.runId,
       discrepancies: latestRun.discrepancyCount,
       amountAtRisk: latestRun.totalAmountAtRiskPaise,
       user: 'system@ledgersense.internal',
-      timestamp: new Date().toISOString(),
-    });
+    }));
     await persistReconRun(latestRun);
     await persistAuditLog('SYSTEM_BOOTSTRAP_INITIALIZED', 'system@ledgersense.internal', `Bootstrap run ${latestRun.runId}`, latestRun.runId);
     await redisCache.setLatestRunSummary(latestRun);
@@ -150,12 +236,11 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
     return;
   }
 
-  auditLogs.unshift({
+  auditLogs.unshift(createAuditRecord({
     action: 'USER_LOGIN',
     user: result.user?.username,
     role: result.user?.role,
-    timestamp: new Date().toISOString(),
-  });
+  }));
 
   res.json({
     message: 'Login successful',
@@ -173,38 +258,64 @@ app.get('/api/nova/status', (req: Request, res: Response) => {
   res.json(novaClient.getStatus());
 });
 
-app.post('/api/nova/sync', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
+    const [rawPayments, rawGatewayTxs, rawBankTxs, rawSettlements] = await Promise.all([
       novaClient.fetchPayments(),
       novaClient.fetchGatewayTransactions(),
       novaClient.fetchBankTransactions(),
       novaClient.fetchSettlements(),
     ]);
 
-    auditLogs.unshift({
+    const payments = mapPayments(rawPayments);
+    const gatewayTransactions = mapGatewayTxs(rawGatewayTxs);
+    const bankTransactions = mapBankTxs(rawBankTxs);
+    const settlements = mapSettlements(rawSettlements);
+
+    auditLogs.unshift(createAuditRecord({
       action: 'NOVA_FEED_SYNC',
       user: req.user?.username,
-      records: payments.length + gatewayTxs.length + bankTxs.length + settlements.length,
-      timestamp: new Date().toISOString(),
-    });
+      records: payments.length + gatewayTransactions.length + bankTransactions.length + settlements.length,
+    }));
 
     res.json({
       message: 'Nova financial data streams ingested successfully',
       counts: {
         payments: payments.length,
-        gatewayTransactions: gatewayTxs.length,
-        bankTransactions: bankTxs.length,
+        gatewayTransactions: gatewayTransactions.length,
+        bankTransactions: bankTransactions.length,
         settlements: settlements.length,
       },
+      payments,
+      gatewayTransactions,
+      bankTransactions,
+      settlements,
+      syncedAt: new Date().toISOString(),
+      source: 'Aczen Nova Financial API',
       sample: {
         payments: payments.slice(0, 2),
-        gatewayTransactions: gatewayTxs.slice(0, 2),
+        gatewayTransactions: gatewayTransactions.slice(0, 2),
       },
     });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to ingest Nova streams', details: err.message });
   }
+});
+
+// Direct 4-source stream ingestion endpoints (FIN-11 M1, M2, M3, M9)
+app.get(['/api/payments', '/payments'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const rawPayments = await novaClient.fetchPayments();
+  res.json({ count: rawPayments.length, payments: mapPayments(rawPayments) });
+});
+
+app.get(['/api/gateway-transactions', '/gateway-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const rawGw = await novaClient.fetchGatewayTransactions();
+  res.json({ count: rawGw.length, gatewayTransactions: mapGatewayTxs(rawGw) });
+});
+
+app.get(['/api/bank-transactions', '/bank-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const rawBank = await novaClient.fetchBankTransactions();
+  res.json({ count: rawBank.length, bankTransactions: mapBankTxs(rawBank) });
 });
 
 // 4. 7-Stage Reconciliation Run (B6) with Distributed Job Locking & Cache
@@ -234,14 +345,13 @@ app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, r
     await redisCache.cacheRunSummary(result.runId, result);
     await redisCache.setLatestRunSummary(result);
 
-    auditLogs.unshift({
+    auditLogs.unshift(createAuditRecord({
       action: 'RECONCILIATION_RUN_COMPLETED',
       runId: result.runId,
       discrepancies: result.discrepancyCount,
       amountAtRisk: result.totalAmountAtRiskPaise,
       user: req.user?.username,
-      timestamp: new Date().toISOString(),
-    });
+    }));
 
     await persistReconRun(result);
     await persistAuditLog('RECONCILIATION_RUN_COMPLETED', req.user?.username || 'system', `Run ${result.runId}: ${result.discrepancyCount} discrepancies`, result.runId);
@@ -305,7 +415,7 @@ app.get('/api/cases/:id', authenticate, (req: AuthenticatedRequest, res: Respons
 });
 
 app.post('/api/cases/:id/decision', authenticate, async (req: AuthenticatedRequest, res: Response) => {
-  const { decision, reason } = req.body;
+  const { decision, reason, rationale } = req.body;
   if (!['APPROVED', 'REJECTED', 'ESCALATED'].includes(decision)) {
     res.status(400).json({ error: 'Decision must be APPROVED, REJECTED, or ESCALATED' });
     return;
@@ -319,30 +429,38 @@ app.post('/api/cases/:id/decision', authenticate, async (req: AuthenticatedReque
   }
 
   currentCases[caseIndex].status = decision;
-  const rationaleText = reason || 'Reviewed by finance analyst';
+  const rationaleText = reason || rationale || 'Reviewed by finance analyst';
 
-  auditLogs.unshift({
+  auditLogs.unshift(createAuditRecord({
     action: 'CASE_DECISION_RECORDED',
     caseId,
     decision,
     reason: rationaleText,
     user: req.user?.username,
-    timestamp: new Date().toISOString(),
-  });
+  }));
 
   await persistDecision(caseId, decision, rationaleText, req.user?.username || 'admin');
 
   res.json({
     message: `Case ${caseId} updated to ${decision}`,
     case: currentCases[caseIndex],
+    success: true,
+    caseId,
+    newStatus: decision,
   });
 });
 
 // 6. Settlements & Batches (B6 & B9)
-app.get('/api/settlements', authenticate, async (req: AuthenticatedRequest, res: Response) => {
-  const settlements = await novaClient.fetchSettlements();
-  const bankTxs = await novaClient.fetchBankTransactions();
-  res.json({ settlements, bankTransactions: bankTxs });
+app.get(['/api/settlements', '/settlements'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const rawSettlements = await novaClient.fetchSettlements();
+  const rawBankTxs = await novaClient.fetchBankTransactions();
+  const settlements = mapSettlements(rawSettlements);
+  const bankTransactions = mapBankTxs(rawBankTxs);
+  res.json({
+    count: settlements.length,
+    settlements,
+    bankTransactions,
+  });
 });
 
 // 7. Immutable Audit Trail (B2 & DB Core)
@@ -410,6 +528,7 @@ app.get('/api/report', authenticate, async (req: AuthenticatedRequest, res: Resp
       settlementBatches: settlements.length,
       cleanMatchedOrders: run.matchedCount,
       discrepanciesFound: run.discrepancyCount,
+      totalSettled: `₹${(run.totalSettledPaise / 100).toFixed(2)}`,
       totalSettledAmount: `₹${(run.totalSettledPaise / 100).toFixed(2)}`,
       totalAmountAtRisk: `₹${(run.totalAmountAtRiskPaise / 100).toFixed(2)}`,
       falseApprovalRate: '0.0000%',

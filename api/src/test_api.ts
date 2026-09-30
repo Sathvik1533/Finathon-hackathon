@@ -1,6 +1,9 @@
 import app from './server';
 import { loginUser, generateToken } from './auth';
 import { reconEngine } from './reconEngine';
+import { closePool } from './db';
+
+process.env.NODE_ENV = 'test';
 
 function createMockResponse(onEnd: (status: number, data: any) => void) {
   let statusCode = 200;
@@ -89,12 +92,15 @@ async function runTests() {
     (app as any).handle(reconReq, mockRes);
   });
 
+  await closePool();
   console.log('======================================================');
   console.log('  ✓ ALL NODE.JS EXPRESS BACKEND CHECKS PASSED!');
   console.log('======================================================');
+  process.exit(0);
 }
 
-runTests().catch((err) => {
+runTests().catch(async (err) => {
   console.error('Test failed:', err);
+  await closePool();
   process.exit(1);
 });

@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import path from 'path';
 import { config } from './config';
 import { checkDbHealth } from './db';
 import { loginUser, authenticate, AuthenticatedRequest } from './auth';
@@ -11,10 +12,38 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Serve static web UI
+const webDistPath = path.resolve(__dirname, '../../web');
+app.use(express.static(webDistPath));
+
 // In-memory state storage (persisted / synced with DB when connected)
 let currentCases: DiscrepancyCase[] = [];
 let latestRun: any = null;
 const auditLogs: any[] = [];
+
+// Seed initial state
+(async function init() {
+  try {
+    const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
+      novaClient.fetchPayments(),
+      novaClient.fetchGatewayTransactions(),
+      novaClient.fetchBankTransactions(),
+      novaClient.fetchSettlements(),
+    ]);
+    latestRun = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
+    currentCases = [...latestRun.cases];
+    auditLogs.unshift({
+      action: 'SYSTEM_BOOTSTRAP_INITIALIZED',
+      runId: latestRun.runId,
+      discrepancies: latestRun.discrepancyCount,
+      amountAtRisk: latestRun.totalAmountAtRiskPaise,
+      user: 'system@ledgersense.internal',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Initialization error:', err);
+  }
+})();
 
 // 1. Health checks (B1 requirement)
 app.get(['/health', '/api/health'], async (req: Request, res: Response) => {

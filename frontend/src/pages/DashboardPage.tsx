@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { useReconcile } from '../hooks/useReconcile';
 import { SlimIconSidebar } from '../components/layout/SlimIconSidebar';
 import { downloadReportCsv } from '../api/report';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { CANONICAL_EASE, SPRING_FAST, buttonPressProps, cardHoverProps } from '../utils/motion';
 
 const paise = (v: number) => `₹${(v / 100).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
 
@@ -51,7 +53,11 @@ export const DashboardPage: React.FC = () => {
 
         <div className="flex items-center gap-3">
           {/* Date Range Selector Pill */}
-          <div className="bg-white border border-slate-200/90 rounded-full px-4 py-2 text-xs font-medium text-slate-700 flex items-center gap-2 shadow-xs cursor-pointer hover:border-slate-300">
+          <motion.div
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="bg-white border border-slate-200/90 rounded-full px-4 py-2 text-xs font-medium text-slate-700 flex items-center gap-2 shadow-xs cursor-pointer hover:border-slate-300"
+          >
             <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth="2" />
               <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2" />
@@ -60,13 +66,14 @@ export const DashboardPage: React.FC = () => {
             </svg>
             <span>29 Sep, 2026 – 01 Oct, 2026</span>
             <span className="text-slate-400 text-[10px]">▼</span>
-          </div>
+          </motion.div>
 
-          {/* Primary Green Action Pill Button */}
-          <button
+          {/* Primary Green Action Pill Button with Spring Feedback */}
+          <motion.button
+            {...buttonPressProps}
             onClick={trigger}
             disabled={loading}
-            className="bg-[#006241] hover:bg-[#004e34] active:scale-[0.98] text-white rounded-full px-5 py-2.5 text-xs font-semibold flex items-center gap-2 shadow-pill transition-all cursor-pointer disabled:opacity-50"
+            className="bg-[#006241] hover:bg-[#004e34] text-white rounded-full px-5 py-2.5 text-xs font-semibold flex items-center gap-2 shadow-pill transition-colors cursor-pointer disabled:opacity-50"
           >
             {loading ? (
               <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
@@ -77,15 +84,19 @@ export const DashboardPage: React.FC = () => {
               <span className="text-sm font-bold">+</span>
             )}
             <span>{loading ? 'Reconciling...' : 'Run Reconciliation'}</span>
-          </button>
+          </motion.button>
         </div>
       </div>
 
       {error && (
-        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 flex items-center justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 flex items-center justify-between"
+        >
           <span>⚠ {error}</span>
-          <button onClick={() => trigger()} className="underline font-semibold">Retry</button>
-        </div>
+          <button onClick={() => trigger()} className="underline font-semibold cursor-pointer">Retry</button>
+        </motion.div>
       )}
 
       {/* Main Container Layout: Slim Sidebar + 3-Column Grid */}
@@ -103,7 +114,10 @@ export const DashboardPage: React.FC = () => {
           <div className="lg:col-span-4 space-y-6">
             
             {/* Card 1: Payment Goal with Forest Green VISA Card */}
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-4">
+            <motion.div
+              {...cardHoverProps}
+              className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Payment Goal</h3>
@@ -111,14 +125,18 @@ export const DashboardPage: React.FC = () => {
                 </div>
                 <button
                   onClick={() => navigate('/settlement')}
-                  className="h-7 w-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 text-xs"
+                  className="h-7 w-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 text-xs cursor-pointer"
                 >
                   ↗
                 </button>
               </div>
 
               {/* The Iconic Forest Green Card */}
-              <div className="bg-[#006241] text-white rounded-2xl p-5 shadow-sm space-y-4 relative overflow-hidden">
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                transition={SPRING_FAST}
+                className="bg-[#006241] text-white rounded-2xl p-5 shadow-sm space-y-4 relative overflow-hidden"
+              >
                 <div className="flex items-center justify-between">
                   <span className="font-extrabold tracking-wider text-base">VISA</span>
                   <span className="text-xs font-mono opacity-80">)))</span>
@@ -133,7 +151,7 @@ export const DashboardPage: React.FC = () => {
                   <span>**** 99182</span>
                   <span>EXP 09/26</span>
                 </div>
-              </div>
+              </motion.div>
 
               {/* Weekly Revenue / Net Settled */}
               <div className="pt-2 flex items-center justify-between">
@@ -141,14 +159,22 @@ export const DashboardPage: React.FC = () => {
                   <div className="text-[11px] text-slate-400">Weekly Revenue</div>
                   <div className="text-base font-bold text-slate-900 mt-0.5">+₹3,945 USD</div>
                 </div>
-                <span className="bg-[#00c070] text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-xs">
+                <motion.span
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  transition={SPRING_FAST}
+                  className="bg-[#00c070] text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-xs"
+                >
                   +12.8%
-                </span>
+                </motion.span>
               </div>
-            </div>
+            </motion.div>
 
             {/* Card 2: Payment History Table */}
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-4">
+            <motion.div
+              {...cardHoverProps}
+              className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-bold text-slate-900">Payment History</h3>
@@ -156,14 +182,13 @@ export const DashboardPage: React.FC = () => {
                 </div>
                 <button
                   onClick={() => navigate('/timeline')}
-                  className="h-7 w-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 text-xs"
+                  className="h-7 w-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 text-xs cursor-pointer"
                 >
                   ↗
                 </button>
               </div>
 
               <div className="space-y-3">
-                
                 {/* Row 1: ORD-101 */}
                 <div className="flex items-center justify-between text-xs py-1.5 border-b border-slate-100">
                   <div className="flex items-center gap-2.5">
@@ -176,7 +201,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-slate-900 mono">₹1,000.00</div>
+                    <div className="font-bold text-slate-900 font-mono">₹1,000.00</div>
                     <div className="text-[10px] text-[#00c070] font-medium flex items-center justify-end gap-1">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#00c070]" /> Settled
                     </div>
@@ -195,7 +220,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-slate-900 mono">₹2,500.00</div>
+                    <div className="font-bold text-slate-900 font-mono">₹2,500.00</div>
                     <div className="text-[10px] text-[#00c070] font-medium flex items-center justify-end gap-1">
                       <span className="h-1.5 w-1.5 rounded-full bg-[#00c070]" /> Settled
                     </div>
@@ -214,7 +239,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-slate-900 mono">₹1,500.00</div>
+                    <div className="font-bold text-slate-900 font-mono">₹1,500.00</div>
                     <div className="text-[10px] text-amber-600 font-medium flex items-center justify-end gap-1">
                       <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> ₹10 Leak
                     </div>
@@ -233,7 +258,7 @@ export const DashboardPage: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-slate-900 mono">₹800.00</div>
+                    <div className="font-bold text-slate-900 font-mono">₹800.00</div>
                     <div className="text-[10px] text-blue-600 font-medium flex items-center justify-end gap-1">
                       <span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> T+2 Lag
                     </div>
@@ -241,7 +266,7 @@ export const DashboardPage: React.FC = () => {
                 </div>
 
               </div>
-            </div>
+            </motion.div>
 
           </div>
 
@@ -250,255 +275,264 @@ export const DashboardPage: React.FC = () => {
           {/* ========================================================= */}
           <div className="lg:col-span-5 space-y-6">
             
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-card space-y-6">
+            {/* Main Center Card matching the Pinterest Center Block */}
+            <motion.div
+              {...cardHoverProps}
+              className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-card space-y-6"
+            >
               
-              {/* Header with Segmented Pills */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="h-7 w-7 rounded-lg bg-[#e6f7ef] text-[#006241] flex items-center justify-center">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth="2" />
-                      <line x1="2" y1="10" x2="22" y2="10" strokeWidth="2" />
-                    </svg>
-                  </div>
-                  <h3 className="text-sm font-bold text-slate-900">Engagement Rate</h3>
+              {/* Header + Segmented Period Filter */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Engagement Rates</h2>
+                  <p className="text-[11px] text-slate-400">Reconciliation batch settlement velocity</p>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="bg-[#f4f5f7] p-1 rounded-full flex items-center text-xs">
-                    <button
-                      onClick={() => setFilterPeriod('Monthly')}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        filterPeriod === 'Monthly'
-                          ? 'bg-[#006241] text-white font-semibold shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Monthly
-                    </button>
-                    <button
-                      onClick={() => setFilterPeriod('Annually')}
-                      className={`px-3 py-1 rounded-full transition-colors ${
-                        filterPeriod === 'Annually'
-                          ? 'bg-[#006241] text-white font-semibold shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Annually
-                    </button>
-                  </div>
+                {/* Period Selector Pills */}
+                <div className="bg-[#f4f5f7] p-1 rounded-full flex items-center gap-1 text-[11px] font-semibold">
                   <button
-                    onClick={() => navigate('/report')}
-                    className="h-7 w-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 text-xs"
+                    onClick={() => setFilterPeriod('Monthly')}
+                    className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                      filterPeriod === 'Monthly'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
                   >
-                    ↗
+                    Monthly
+                  </button>
+                  <button
+                    onClick={() => setFilterPeriod('Annually')}
+                    className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                      filterPeriod === 'Annually'
+                        ? 'bg-white text-slate-900 shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Annually
                   </button>
                 </div>
               </div>
 
-              {/* The Iconic Pinterest Striped Capsule Bars Chart */}
-              <div className="pt-6 pb-2">
-                <div className="flex items-end justify-between gap-3 h-52 px-2 relative">
+              {/* Big Metric Display */}
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-mono">
+                    {run ? paise(run.totalSettledPaise) : '₹48,702.00'}
+                  </div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">Total settled volume this cycle</div>
+                </div>
+                <motion.div
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: 1 }}
+                  transition={SPRING_FAST}
+                  className="bg-[#00c070] text-white text-xs font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1"
+                >
+                  <span>▲</span>
+                  <span>+17.8%</span>
+                </motion.div>
+              </div>
+
+              {/* 6-Capsule Bar Chart matching Pinterest Reference */}
+              <div className="space-y-2 pt-2">
+                <div className="h-44 flex items-end justify-between gap-3 px-2">
                   
-                  {/* Floating Pill on Peak Apr Bar */}
-                  <div className="absolute top-0 left-[55%] -translate-x-1/2 z-10">
-                    <span className="bg-[#00c070] text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-xs">
-                      +17.8%
-                    </span>
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#006241] mx-auto mt-0.5" />
+                  {/* Bar 1 - Striped Sage */}
+                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: '48%' }}
+                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.05 }}
+                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
+                    />
+                    <span className="text-[10px] font-semibold text-slate-400">Jan</span>
                   </div>
 
-                  {/* Bar 1: JAN (2k) */}
-                  <div className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full max-w-[42px] h-20 bar-striped rounded-full transition-all hover:scale-105" />
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">JAN</span>
+                  {/* Bar 2 - Striped Sage */}
+                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: '62%' }}
+                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.12 }}
+                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
+                    />
+                    <span className="text-[10px] font-semibold text-slate-400">Feb</span>
                   </div>
 
-                  {/* Bar 2: FEB (4.2k) */}
-                  <div className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full max-w-[42px] h-36 bar-striped rounded-full transition-all hover:scale-105" />
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">FEB</span>
+                  {/* Bar 3 - Striped Sage */}
+                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: '38%' }}
+                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.19 }}
+                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
+                    />
+                    <span className="text-[10px] font-semibold text-slate-400">Mar</span>
                   </div>
 
-                  {/* Bar 3: MAR (3k) */}
-                  <div className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full max-w-[42px] h-28 bar-striped rounded-full transition-all hover:scale-105" />
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">MAR</span>
+                  {/* Bar 4 - Striped Sage */}
+                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: '75%' }}
+                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.26 }}
+                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
+                    />
+                    <span className="text-[10px] font-semibold text-slate-400">Apr</span>
                   </div>
 
-                  {/* Bar 4: APR (Peak 5k - Solid Deep Green Bar!) */}
-                  <div className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full max-w-[42px] h-48 bg-[#006241] rounded-full shadow-sm transition-all hover:scale-105" />
-                    <span className="text-[10px] font-bold text-slate-900 uppercase">APR</span>
+                  {/* Bar 5 - Striped Sage */}
+                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: '54%' }}
+                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.33 }}
+                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
+                    />
+                    <span className="text-[10px] font-semibold text-slate-400">May</span>
                   </div>
 
-                  {/* Bar 5: MAY (3.8k) */}
-                  <div className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full max-w-[42px] h-32 bar-striped rounded-full transition-all hover:scale-105" />
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">MAY</span>
-                  </div>
-
-                  {/* Bar 6: JUN (4k) */}
-                  <div className="flex-1 flex flex-col items-center gap-2">
-                    <div className="w-full max-w-[42px] h-38 bar-striped rounded-full transition-all hover:scale-105" />
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase">JUN</span>
+                  {/* Bar 6 - The Active Solid Forest Green Peak Bar */}
+                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end relative">
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.5, ...SPRING_FAST }}
+                      className="absolute -top-7 bg-slate-900 text-white text-[10px] font-mono px-2 py-0.5 rounded-md whitespace-nowrap shadow-xs"
+                    >
+                      ₹48.7k Peak
+                    </motion.div>
+                    <motion.div
+                      initial={{ height: 0 }}
+                      animate={{ height: '92%' }}
+                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.4 }}
+                      className="w-full max-w-[42px] rounded-full bg-[#006241] shadow-pill"
+                    />
+                    <span className="text-[10px] font-bold text-[#006241]">Jun</span>
                   </div>
 
                 </div>
               </div>
 
-              {/* 7-Stage Reconciliation Pipeline Cards */}
-              <div className="pt-2 border-t border-slate-100 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-800">7-Stage Deterministic Reconciliation</span>
-                  <span className="text-[10px] font-mono text-[#006241] bg-[#e6f7ef] px-2 py-0.5 rounded-full font-semibold">
-                    100% Accuracy · 0 Drift
-                  </span>
+              {/* Engine Pipeline Status Line */}
+              <div className="p-4 bg-[#e6f7ef] border border-[#c1ebd5] rounded-2xl flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#00c070] animate-pulse" />
+                  <span className="font-semibold text-[#006241]">7-Stage Engine Operational</span>
                 </div>
-
-                <div className="grid grid-cols-4 gap-2 text-center text-[10px]">
-                  <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="font-bold text-slate-900">S1 Txn-ID</div>
-                    <div className="text-emerald-700 font-semibold mt-0.5">✓ 1.0 Match</div>
-                  </div>
-                  <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
-                    <div className="font-bold text-slate-900">S2 UTR Regex</div>
-                    <div className="text-emerald-700 font-semibold mt-0.5">✓ Parsed</div>
-                  </div>
-                  <div className="p-2 rounded-xl bg-amber-50 border border-amber-200">
-                    <div className="font-bold text-amber-900">S4 Fee Audit</div>
-                    <div className="text-amber-800 font-bold mt-0.5">⚠️ ₹10 Leak</div>
-                  </div>
-                  <div className="p-2 rounded-xl bg-blue-50 border border-blue-200">
-                    <div className="font-bold text-blue-900">S6 Settle 1:N</div>
-                    <div className="text-blue-800 font-bold mt-0.5">⏱️ T+2 Lag</div>
-                  </div>
-                </div>
+                <span className="font-mono text-[#006241] font-bold">11/11 Modules Active</span>
               </div>
 
-            </div>
+            </motion.div>
 
           </div>
 
           {/* ========================================================= */}
-          {/* RIGHT COLUMN: Total Balance Curve + Amount at Risk (3.2 cols) */}
+          {/* RIGHT COLUMN: Flow Area Chart + Amount at Risk (3.2 cols) */}
           {/* ========================================================= */}
           <div className="lg:col-span-3 space-y-6">
-            
-            {/* Card A: Payment Goal / Area Curve Card */}
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-3">
+
+            {/* Card 4: Flow Chart Card with Reconcile / Export Buttons */}
+            <motion.div
+              {...cardHoverProps}
+              className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-4"
+            >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Payment Goal</h3>
-                  <p className="text-[11px] text-slate-400">Total amount goal</p>
+                  <h3 className="text-sm font-bold text-slate-900">Reconciliation Flow</h3>
+                  <p className="text-[11px] text-slate-400">Stream trajectory</p>
                 </div>
-                <button
-                  onClick={() => navigate('/report')}
-                  className="h-7 w-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 text-xs"
-                >
-                  ↗
-                </button>
-              </div>
-
-              <div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">Total Balance</div>
-                <div className="text-2xl font-bold tracking-tight text-slate-900 mt-0.5">
-                  $32,678.90
+                <div className="h-7 w-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 text-xs">
+                  ≋
                 </div>
               </div>
 
-              {/* Area Curve Chart SVG */}
-              <div className="h-20 w-full relative">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 200 80" preserveAspectRatio="none">
+              {/* Area Wave / SVG Chart */}
+              <div className="h-28 w-full relative overflow-hidden flex items-end">
+                <svg className="w-full h-full" viewBox="0 0 200 80" preserveAspectRatio="none">
                   <defs>
-                    <linearGradient id="mintGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#00c070" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#00c070" stopOpacity="0.0" />
+                    <linearGradient id="forestAreaGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#006241" stopOpacity="0.25" />
+                      <stop offset="100%" stopColor="#006241" stopOpacity="0.0" />
                     </linearGradient>
                   </defs>
                   <path
-                    d="M0,50 Q20,35 40,48 T80,30 T120,45 T160,25 T200,35 L200,80 L0,80 Z"
-                    fill="url(#mintGrad)"
+                    d="M0,55 C30,30 60,65 100,25 C140,-5 170,40 200,10 L200,80 L0,80 Z"
+                    fill="url(#forestAreaGrad)"
                   />
                   <path
-                    d="M0,50 Q20,35 40,48 T80,30 T120,45 T160,25 T200,35"
+                    d="M0,55 C30,30 60,65 100,25 C140,-5 170,40 200,10"
                     fill="none"
-                    stroke="#00c070"
+                    stroke="#006241"
                     strokeWidth="2.5"
-                    strokeLinecap="round"
                   />
                 </svg>
               </div>
 
-              {/* Dual Action Buttons matching reference (Send ↑ / Receive ↓) */}
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <button
+              {/* Dual Action Pill Buttons */}
+              <div className="flex items-center gap-2 pt-1">
+                <motion.button
+                  {...buttonPressProps}
                   onClick={() => trigger()}
-                  disabled={loading}
-                  className="bg-[#006241] hover:bg-[#004e34] active:scale-95 text-white rounded-full py-2 text-xs font-semibold flex items-center justify-center gap-1 shadow-xs transition-all"
+                  className="flex-1 bg-[#006241] hover:bg-[#004e34] text-white rounded-full py-2 px-3 text-xs font-semibold shadow-pill transition-colors flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <span>Reconcile</span>
                   <span>↑</span>
-                </button>
-                <button
+                </motion.button>
+                <motion.button
+                  {...buttonPressProps}
                   onClick={handleExportCsv}
-                  className="bg-white border border-slate-200 hover:bg-slate-50 active:scale-95 text-slate-700 rounded-full py-2 text-xs font-semibold flex items-center justify-center gap-1 shadow-xs transition-all"
+                  className="flex-1 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full py-2 px-3 text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <span>Export</span>
                   <span>↓</span>
-                </button>
+                </motion.button>
               </div>
-            </div>
+            </motion.div>
 
-            {/* Card B: Amount of credit / Amount at Risk */}
-            <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-4">
-              <div className="flex items-center gap-2">
-                <div className="h-6 w-6 rounded-lg bg-[#e6f7ef] text-[#006241] flex items-center justify-center">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <rect x="2" y="5" width="20" height="14" rx="2" strokeWidth="2" />
-                    <line x1="2" y1="10" x2="22" y2="10" strokeWidth="2" />
-                  </svg>
+            {/* Card 5: Amount at Risk Card with Stacked Avatars */}
+            <motion.div
+              {...cardHoverProps}
+              className="bg-[#e6f7ef] border border-[#c1ebd5] rounded-3xl p-5 shadow-xs space-y-4"
+            >
+              <div>
+                <div className="text-[11px] font-bold text-[#006241] uppercase tracking-wider">
+                  Amount at Risk (M10)
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900">Amount of credit</h3>
-                  <p className="text-[10px] text-slate-400">Total refund amount with fee</p>
+                <div className="text-2xl font-bold font-mono text-[#006241] mt-1">
+                  {run ? paise(run.totalAmountAtRiskPaise) : '₹792.92'}
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold tracking-tight text-slate-900">
-                  {run ? paise(run.totalAmountAtRiskPaise) : '₹8,945.89'}
+                <div className="text-[11px] text-emerald-800/80 mt-0.5">
+                  {run ? `${run.discrepancyCount} exceptions pending human triage` : '2 exceptions pending review'}
                 </div>
-                <span className="bg-[#00c070] text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-xs">
-                  +12.8%
-                </span>
               </div>
 
-              {/* Mandatory Payments & Reviewers Row */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-semibold text-slate-800">Mandatory Review</div>
-                  <div className="text-[10px] text-slate-400">Recent review policy</div>
-                </div>
-
-                {/* Stacked Avatars + Green Badge */}
-                <div className="flex items-center -space-x-2">
-                  <div className="h-7 w-7 rounded-full bg-amber-400 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-xs">
+              {/* Stacked FinOps Team Avatars matching Pinterest Card */}
+              <div className="pt-2 flex items-center justify-between">
+                <div className="flex -space-x-2">
+                  <div className="h-7 w-7 rounded-full bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold ring-2 ring-white">
                     P
                   </div>
-                  <div className="h-7 w-7 rounded-full bg-emerald-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-xs">
+                  <div className="h-7 w-7 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-bold ring-2 ring-white">
                     R
                   </div>
-                  <div className="h-7 w-7 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-xs">
-                    A
+                  <div className="h-7 w-7 rounded-full bg-slate-700 text-white flex items-center justify-center text-[10px] font-bold ring-2 ring-white">
+                    S
                   </div>
-                  <div className="h-7 w-7 rounded-full bg-[#006241] border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-xs">
+                  <div className="h-7 w-7 rounded-full bg-[#006241] text-white flex items-center justify-center text-[9px] font-bold ring-2 ring-white">
                     +2
                   </div>
                 </div>
-              </div>
 
-            </div>
+                <motion.button
+                  {...buttonPressProps}
+                  onClick={() => navigate('/exceptions')}
+                  className="text-xs font-bold text-[#006241] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <span>Triage</span>
+                  <span>→</span>
+                </motion.button>
+              </div>
+            </motion.div>
 
           </div>
 

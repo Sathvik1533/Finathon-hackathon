@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { PageShell } from '../components/layout/PageShell';
 import { DataTable } from '../components/ui/DataTable';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { getSettlements } from '../api/settlements';
 import type { Settlement } from '../api/settlements';
 import { useAuth } from '../context/AuthContext';
+import { buttonPressProps, cardHoverProps, containerStaggerVariants, itemFadeInVariants } from '../utils/motion';
 
 const paise = (v: number | null) =>
   v == null ? '—' : `₹${(v / 100).toFixed(2)}`;
@@ -49,18 +51,25 @@ export const SettlementPage: React.FC = () => {
   return (
     <PageShell
       title="One-to-Many Settlement Matcher"
-      subtitle="M9 — Aggregating 1:N asynchronous transactions into lump-sum bank credits"
+      subtitle="M9 — Mathematical aggregation of 1:N asynchronous transactions into lump-sum bank credits"
       actions={
-        <button
+        <motion.button
+          {...buttonPressProps}
           onClick={load}
-          className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-full text-xs font-semibold shadow-xs transition-colors"
+          className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-full text-xs font-semibold shadow-xs transition-colors cursor-pointer"
         >
           ↺ Refresh
-        </button>
+        </motion.button>
       }
     >
       {error && (
-        <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700">{error}</div>
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700"
+        >
+          {error}
+        </motion.div>
       )}
 
       {!loading && settlements.length === 0 && !error && (
@@ -72,13 +81,26 @@ export const SettlementPage: React.FC = () => {
       )}
 
       {settlements.length > 0 && (
-        <div className="space-y-6">
-          <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card">
+        <motion.div
+          variants={containerStaggerVariants}
+          initial="hidden"
+          animate="visible"
+          className="space-y-6"
+        >
+          <motion.div
+            variants={itemFadeInVariants}
+            className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card"
+          >
             <DataTable columns={columns as any} rows={settlements as any[]} loading={loading} />
-          </div>
+          </motion.div>
 
           {settlements.map((s) => (
-            <div key={s.settlementId} className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-card space-y-5">
+            <motion.div
+              key={s.settlementId}
+              variants={itemFadeInVariants}
+              {...cardHoverProps}
+              className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-card space-y-5"
+            >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 border-b border-slate-100 gap-3">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 font-mono">1:N Batch Aggregation · {s.settlementId}</h3>
@@ -104,7 +126,7 @@ export const SettlementPage: React.FC = () => {
                       return (
                         <div
                           key={co.orderId}
-                          className={`p-4 rounded-2xl border space-y-1.5 ${
+                          className={`p-4 rounded-2xl border space-y-1.5 transition-all ${
                             isErr ? 'bg-amber-50/50 border-amber-200' : 'bg-slate-50 border-slate-200/80'
                           }`}
                         >
@@ -132,9 +154,9 @@ export const SettlementPage: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
     </PageShell>
   );

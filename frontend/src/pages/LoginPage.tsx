@@ -5,8 +5,8 @@ import { useAuth } from '../context/AuthContext';
 export const LoginPage: React.FC = () => {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -25,21 +25,24 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+    <div className="min-h-screen bg-[#f4f5f7] flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="text-2xl font-bold text-slate-900">LedgerSense</div>
-          <div className="text-xs font-mono text-slate-400 mt-1">FIN-11 · Payment Reconciliation Engine</div>
+        {/* Logo matching Pinterest green mark */}
+        <div className="text-center mb-6">
+          <div className="h-12 w-12 rounded-2xl bg-[#006241] mx-auto flex items-center justify-center text-white font-bold text-xl shadow-pill mb-3">
+            LS
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">LedgerSense</h1>
+          <p className="text-xs text-slate-400 mt-1 font-medium">FIN-11 · Payment Reconciliation Engine</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-8">
-          <h2 className="text-base font-semibold text-slate-800 mb-5">Sign in to your account</h2>
+        <div className="bg-white border border-slate-200/80 rounded-3xl shadow-card p-8 space-y-5">
+          <h2 className="text-base font-bold text-slate-900">Sign in to your account</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Username</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Username</label>
               <input
                 type="text"
                 value={username}
@@ -47,23 +50,23 @@ export const LoginPage: React.FC = () => {
                 required
                 autoFocus
                 placeholder="admin"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#006241]/20 focus:border-[#006241] transition-colors"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1.5">Password</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-colors"
+                className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#006241]/20 focus:border-[#006241] transition-colors"
               />
             </div>
 
             {error && (
-              <div className="text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2">
+              <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2">
                 {error}
               </div>
             )}
@@ -71,16 +74,16 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold disabled:opacity-50 transition-colors mt-2"
+              className="w-full py-2.5 bg-[#006241] hover:bg-[#004e34] active:scale-[0.98] text-white rounded-full text-xs font-semibold shadow-pill transition-all cursor-pointer disabled:opacity-50 mt-2"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Signing in...' : 'Sign in to Console'}
             </button>
           </form>
         </div>
 
-        <div className="text-center mt-5 text-xs text-slate-400 space-y-0.5">
-          <div>Demo: <span className="font-mono text-slate-600">admin / admin123</span></div>
-          <div>Reviewer: <span className="font-mono text-slate-600">reviewer / reviewer123</span></div>
+        <div className="text-center mt-5 text-xs text-slate-400 space-y-1">
+          <div>Admin demo: <span className="font-mono text-slate-600 font-semibold">admin / admin123</span></div>
+          <div>Reviewer demo: <span className="font-mono text-slate-600 font-semibold">reviewer / reviewer123</span></div>
         </div>
       </div>
     </div>

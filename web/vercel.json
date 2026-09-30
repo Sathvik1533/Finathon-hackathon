@@ -1,5 +1,11 @@
 {
   "version": 2,
   "name": "finathon-ledgersense-web",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/((?!assets/.*).*)",
+      "destination": "/index.html"
+    }
+  ]
 }

@@ -13,41 +13,41 @@ export const ExceptionsPage: React.FC = () => {
   const [selected, setSelected] = useState<DiscrepancyCase | null>(null);
 
   const columns = [
-    { header: 'Case ID',     accessor: (r: DiscrepancyCase) => <span className="font-mono text-[11px] text-slate-600">{r.caseId}</span> },
-    { header: 'Order',       accessor: (r: DiscrepancyCase) => <span className="font-mono font-semibold">{r.orderId}</span> },
+    { header: 'Case ID',     accessor: (r: DiscrepancyCase) => <span className="font-mono text-xs font-bold text-slate-800">{r.caseId}</span> },
+    { header: 'Order',       accessor: (r: DiscrepancyCase) => <span className="font-mono font-semibold text-slate-900">{r.orderId}</span> },
     { header: 'Type',        accessor: (r: DiscrepancyCase) => <StatusBadge status={r.discrepancyType} /> },
-    { header: 'Amount at Risk', accessor: (r: DiscrepancyCase) => <span className="font-mono text-rose-700 font-semibold">{paise(r.amountAtRisk)}</span> },
+    { header: 'Amount at Risk', accessor: (r: DiscrepancyCase) => <span className="font-mono text-rose-700 font-bold">{paise(r.amountAtRisk)}</span> },
     { header: 'Expected',    accessor: (r: DiscrepancyCase) => <span className="font-mono text-slate-600">{paise(r.expectedAmount)}</span> },
     { header: 'Actual',      accessor: (r: DiscrepancyCase) => <span className="font-mono text-slate-600">{paise(r.actualAmount)}</span> },
     { header: 'Status',      accessor: (r: DiscrepancyCase) => <StatusBadge status={r.status} /> },
-    { header: 'Stage',       accessor: (r: DiscrepancyCase) => <span className="text-slate-400 text-[11px]">Stage {r.stageIdentified}</span> },
+    { header: 'Stage',       accessor: (r: DiscrepancyCase) => <span className="text-slate-400 text-xs">Stage {r.stageIdentified}</span> },
   ];
 
   return (
     <PageShell
-      title="Exceptions Queue"
-      subtitle="M10 — Human review workflow for all flagged discrepancies"
+      title="Exceptions Management Queue"
+      subtitle="M10 — Prioritized human review and governance for financial discrepancy cases"
       actions={
         <button
           onClick={reload}
-          className="px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-600 hover:bg-slate-50 transition-colors"
+          className="bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-full px-4 py-2 text-xs font-semibold shadow-xs transition-colors"
         >
-          ↺ Refresh
+          ↺ Refresh Queue
         </button>
       }
     >
       {error && (
-        <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">{error}</div>
+        <div className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700">{error}</div>
       )}
 
-      {/* Summary banner */}
+      {/* Summary status pill cards matching Pinterest theme */}
       {cases.length > 0 && (
-        <div className="grid grid-cols-4 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {(['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'ESCALATED'] as const).map(s => {
             const count = cases.filter(c => c.status === s).length;
             return (
-              <div key={s} className="bg-white border border-slate-200 rounded-xl px-4 py-3 text-center shadow-sm">
-                <div className="text-xl font-bold font-mono text-slate-800">{count}</div>
+              <div key={s} className="bg-white border border-slate-200/80 rounded-2xl p-4 text-center shadow-card space-y-1">
+                <div className="text-2xl font-bold font-mono text-slate-900">{count}</div>
                 <StatusBadge status={s} size="sm" />
               </div>
             );
@@ -55,13 +55,15 @@ export const ExceptionsPage: React.FC = () => {
         </div>
       )}
 
-      <DataTable
-        columns={columns as any}
-        rows={cases as any[]}
-        onRowClick={(row) => setSelected(row as DiscrepancyCase)}
-        loading={loading}
-        emptyMessage="No exceptions found. Run reconciliation first."
-      />
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card">
+        <DataTable
+          columns={columns as any}
+          rows={cases as any[]}
+          onRowClick={(row) => setSelected(row as DiscrepancyCase)}
+          loading={loading}
+          emptyMessage="No discrepancies flagged. System is in 100% balanced zero-drift state."
+        />
+      </div>
 
       <ExceptionDrawer
         case_={selected}

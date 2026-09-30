@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Sidebar } from './components/layout/Sidebar';
+import { AppLayout } from './components/layout/AppLayout';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { TimelinePage } from './pages/TimelinePage';
@@ -10,15 +10,10 @@ import { ExceptionsPage } from './pages/ExceptionsPage';
 import { SettlementPage } from './pages/SettlementPage';
 import { ReportPage } from './pages/ReportPage';
 
-const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  return (
-    <div className="flex min-h-screen bg-slate-50">
-      <Sidebar />
-      <main className="flex-1 min-w-0">{children}</main>
-    </div>
-  );
+  return <AppLayout>{children}</AppLayout>;
 };
 
 const App: React.FC = () => (
@@ -26,12 +21,12 @@ const App: React.FC = () => (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/dashboard"  element={<AppLayout><DashboardPage /></AppLayout>} />
-        <Route path="/timeline"   element={<AppLayout><TimelinePage /></AppLayout>} />
-        <Route path="/nova"       element={<AppLayout><NovaExplorerPage /></AppLayout>} />
-        <Route path="/exceptions" element={<AppLayout><ExceptionsPage /></AppLayout>} />
-        <Route path="/settlement" element={<AppLayout><SettlementPage /></AppLayout>} />
-        <Route path="/report"     element={<AppLayout><ReportPage /></AppLayout>} />
+        <Route path="/dashboard"  element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+        <Route path="/timeline"   element={<ProtectedRoute><TimelinePage /></ProtectedRoute>} />
+        <Route path="/nova"       element={<ProtectedRoute><NovaExplorerPage /></ProtectedRoute>} />
+        <Route path="/exceptions" element={<ProtectedRoute><ExceptionsPage /></ProtectedRoute>} />
+        <Route path="/settlement" element={<ProtectedRoute><SettlementPage /></ProtectedRoute>} />
+        <Route path="/report"     element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
         <Route path="*"           element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>

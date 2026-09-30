@@ -19,7 +19,7 @@
 - **Our Solution**: A deterministic 7-stage engine that matches records across all 4 sources with zero floating-point penny drift.
 - **Our Unfair Advantage**: Real-world digital commerce accounting from the **Aczen Nova Financial API** + **J.P. Morgan AI Research synthetic methodology** for stress testing.
 - **Live Tech Stack**:
-  - **Frontend**: Single-page modern cockpit (`web/index.html`) deployed on **Vercel**.
+  - **Frontend**: **Next.js + React** (App Router, Tailwind CSS, shadcn/ui patterns) deployed on **Vercel**.
   - **Backend**: **Node.js + Express + TypeScript** deployed on **Railway / Render**.
   - **Cache & Mutex**: **Redis** on Railway with graceful in-memory fallback.
   - **Database**: **Supabase PostgreSQL** with `NUMERIC(18,4)` precision, Row Level Security, and append-only audit triggers.

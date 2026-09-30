@@ -131,6 +131,10 @@
         <button onclick="switchTab('audit')" id="tab-audit" class="px-3.5 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900">
           Audit Trail
         </button>
+        <button onclick="switchTab('report')" id="tab-report" class="px-3.5 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900 flex items-center gap-1.5">
+          <span>Recon Report</span>
+          <span class="bg-emerald-100 text-emerald-800 text-[10px] px-1.5 rounded-full font-mono border border-emerald-200 font-semibold">M11</span>
+        </button>
       </nav>
 
       <!-- Action & Walkthrough Controls -->
@@ -164,6 +168,7 @@
     <button onclick="switchTab('exceptions')" class="px-3 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-700 whitespace-nowrap">Exceptions</button>
     <button onclick="switchTab('settlements')" class="px-3 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-700 whitespace-nowrap">Settlements</button>
     <button onclick="switchTab('audit')" class="px-3 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-700 whitespace-nowrap">Audit</button>
+    <button onclick="switchTab('report')" class="px-3 py-1 bg-slate-100 border border-slate-200 rounded-md text-slate-700 whitespace-nowrap">Recon Report</button>
   </div>
 
   <!-- MAIN BODY -->
@@ -744,7 +749,139 @@
       </div>
     </div>
 
+    <!-- TAB 7: MODULE 11 — RECONCILIATION REPORT -->
+    <div id="view-report" class="space-y-6 hidden">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <span>Reconciliation Report</span>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 mono font-medium">Module 11</span>
+            <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 mono font-medium">FIN-11 Compliance</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5">Structured export-ready report covering all 11 FIN-11 problem statement modules</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="loadReport()" class="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Refresh Report
+          </button>
+          <button onclick="downloadCsvReport()" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Report ID Banner -->
+      <div class="bg-slate-50 border border-slate-200 rounded-xl px-5 py-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+        <div class="flex items-center gap-3">
+          <div class="h-8 w-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <svg class="w-4 h-4 text-emerald-700" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>
+          </div>
+          <div>
+            <div id="rpt-id" class="text-sm font-bold text-slate-900 mono">—</div>
+            <div id="rpt-generated" class="text-[10px] text-slate-500 mono">—</div>
+          </div>
+        </div>
+        <div id="rpt-problem" class="text-xs text-slate-500 mono">FIN-11: End-to-End Payment Reconciliation & Settlement Engine</div>
+      </div>
+
+      <!-- Executive Summary Cards -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Orders Ingested</div>
+          <div id="rpt-orders" class="text-2xl font-bold text-slate-900 mono mt-1">—</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Clean Matches</div>
+          <div id="rpt-matched" class="text-2xl font-bold text-emerald-600 mono mt-1">—</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Discrepancies</div>
+          <div id="rpt-disc" class="text-2xl font-bold text-amber-600 mono mt-1">—</div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+          <div class="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Amount at Risk</div>
+          <div id="rpt-risk" class="text-2xl font-bold text-rose-600 mono mt-1">—</div>
+        </div>
+      </div>
+
+      <!-- Module Coverage Table: All 11 Modules -->
+      <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+        <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-900">FIN-11 Module Coverage — All 11 Modules</h3>
+          <span class="text-xs px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 font-semibold">11/11 Implemented</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-600 uppercase tracking-wider text-[11px] border-b border-slate-200 font-semibold mono">
+              <tr>
+                <th class="p-4">#</th>
+                <th class="p-4">Module</th>
+                <th class="p-4">Status</th>
+                <th class="p-4">Stage / Detail</th>
+              </tr>
+            </thead>
+            <tbody id="report-module-table" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Exception Breakdown + Settlement Verification side by side -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Exception Breakdown -->
+        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+          <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+            <h3 class="text-sm font-bold text-slate-900">Exception Breakdown by Type</h3>
+          </div>
+          <div id="rpt-exception-breakdown" class="p-5 space-y-3 text-xs text-slate-500">
+            — Run reconciliation to load data —
+          </div>
+        </div>
+
+        <!-- Settlement Verification -->
+        <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+          <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+            <h3 class="text-sm font-bold text-slate-900">Settlement Mathematical Verification</h3>
+          </div>
+          <div id="rpt-settlement-verification" class="p-5 space-y-3 text-xs text-slate-500">
+            — Run reconciliation to load data —
+          </div>
+        </div>
+      </div>
+
+      <!-- Case Detail Table -->
+      <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+        <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50">
+          <h3 class="text-sm font-bold text-slate-900">Case Detail — Export-Ready Records</h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-600 uppercase tracking-wider text-[11px] border-b border-slate-200 font-semibold mono">
+              <tr>
+                <th class="p-4">Case ID</th>
+                <th class="p-4">Order ID</th>
+                <th class="p-4">Type</th>
+                <th class="p-4">Amount at Risk</th>
+                <th class="p-4">Expected</th>
+                <th class="p-4">Actual</th>
+                <th class="p-4">Status</th>
+                <th class="p-4">Stage</th>
+              </tr>
+            </thead>
+            <tbody id="report-case-table" class="divide-y divide-slate-100 text-slate-700">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
   </main>
+
 
   <!-- CASE REVIEW & DECISION MODAL -->
   <dialog id="case-modal" class="fixed inset-0 bg-transparent backdrop:bg-slate-900/40 backdrop:backdrop-blur-xs p-4 z-50 m-auto w-full max-w-2xl border-0">
@@ -926,23 +1063,185 @@
 
     // Tab Switching
     function switchTab(tabId) {
-      const tabs = ['dashboard', 'timeline', 'ingestion', 'exceptions', 'settlements', 'audit'];
+      const tabs = ['dashboard', 'timeline', 'ingestion', 'exceptions', 'settlements', 'audit', 'report'];
       tabs.forEach(t => {
         const view = document.getElementById(`view-${t}`);
         const btn = document.getElementById(`tab-${t}`);
         if (t === tabId) {
           view.classList.remove('hidden');
           if (btn) {
-            btn.className = 'px-3.5 py-1.5 rounded-lg transition-all text-slate-900 bg-white shadow-xs border border-slate-200/80 font-semibold';
+            btn.className = 'px-3.5 py-1.5 rounded-lg transition-all text-slate-900 bg-white shadow-xs border border-slate-200/80 font-semibold flex items-center gap-1.5';
           }
         } else {
           view.classList.add('hidden');
           if (btn) {
-            btn.className = 'px-3.5 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900 font-medium';
+            btn.className = 'px-3.5 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900 font-medium flex items-center gap-1.5';
           }
         }
       });
+      // Auto-load report when switching to it
+      if (tabId === 'report') loadReport();
     }
+
+    // Module 11: Load and render Reconciliation Report from /api/report
+    const MODULE_LABELS = {
+      'M1-InternalTransactionRecords': 'M1 — Internal Transaction Records',
+      'M2-PaymentGatewayRecords':      'M2 — Payment Gateway Records',
+      'M3-BankSettlementRecords':      'M3 — Bank Settlement Records',
+      'M4-TransactionIDMatching':      'M4 — Transaction-ID Matching',
+      'M5-ReferenceMatching':          'M5 — Reference Matching',
+      'M6-PartialMatching':            'M6 — Partial Matching',
+      'M7-FeeCalculation':             'M7 — Fee Calculation',
+      'M8-RefundReversalHandling':     'M8 — Refund / Reversal Handling',
+      'M9-SettlementMatching':         'M9 — Settlement Matching',
+      'M10-ExceptionManagement':       'M10 — Exception Management',
+      'M11-ReconciliationReport':      'M11 — Reconciliation Report',
+    };
+
+    async function loadReport() {
+      try {
+        const res = await fetch(`${API_BASE}/api/report`, {
+          headers: { 'Authorization': `Bearer ${jwtToken}` }
+        });
+        if (!res.ok) throw new Error('Report endpoint returned ' + res.status);
+        const data = await res.json();
+
+        // Report ID Banner
+        document.getElementById('rpt-id').textContent = data.reportId || '—';
+        document.getElementById('rpt-generated').textContent = data.generatedAt
+          ? new Date(data.generatedAt).toLocaleString() + ' · by ' + (data.generatedBy || 'system')
+          : '—';
+
+        // Summary KPIs
+        const s = data.summary || {};
+        document.getElementById('rpt-orders').textContent = s.totalOrdersIngested ?? '—';
+        document.getElementById('rpt-matched').textContent = s.cleanMatchedOrders ?? '—';
+        document.getElementById('rpt-disc').textContent = s.discrepanciesFound ?? '—';
+        document.getElementById('rpt-risk').textContent = s.totalAmountAtRisk ?? '—';
+
+        // Module Coverage Table
+        const modTbody = document.getElementById('report-module-table');
+        modTbody.innerHTML = '';
+        const cov = data.moduleCoverage || {};
+        Object.keys(MODULE_LABELS).forEach((key, idx) => {
+          const m = cov[key] || {};
+          const detail = m.stage ? `Stage ${m.stage}` : m.method || m.algorithm || m.reportId || `${m.recordCount ?? ''} records`;
+          const row = document.createElement('tr');
+          row.className = idx % 2 === 0 ? '' : 'bg-slate-50/50';
+          row.innerHTML = `
+            <td class="p-4 text-slate-500 font-mono">${idx + 1}</td>
+            <td class="p-4 font-medium text-slate-800">${MODULE_LABELS[key]}</td>
+            <td class="p-4">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                m.status === 'IMPLEMENTED'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border-amber-200'
+              }">
+                ${m.status === 'IMPLEMENTED' ? '✓' : '⚠'} ${m.status || 'UNKNOWN'}
+              </span>
+            </td>
+            <td class="p-4 text-slate-500 mono text-[11px]">${detail}</td>
+          `;
+          modTbody.appendChild(row);
+        });
+
+        // Exception Breakdown
+        const exDiv = document.getElementById('rpt-exception-breakdown');
+        const eb = data.exceptionBreakdown || [];
+        if (eb.length === 0) {
+          exDiv.innerHTML = '<span class="text-emerald-700 font-semibold">✓ No exceptions — all records matched cleanly.</span>';
+        } else {
+          const typeColors = {
+            FEE_MISMATCH:     'bg-amber-50 border-amber-200 text-amber-800',
+            TIMING_LAG:       'bg-blue-50 border-blue-200 text-blue-800',
+            MISSING_BANK_CREDIT: 'bg-rose-50 border-rose-200 text-rose-800',
+            UNMATCHED_GATEWAY:   'bg-orange-50 border-orange-200 text-orange-800',
+            AMBIGUOUS_MATCH:     'bg-purple-50 border-purple-200 text-purple-800',
+          };
+          exDiv.innerHTML = eb.map(e => `
+            <div class="flex items-center justify-between p-3 rounded-lg border ${typeColors[e.type] || 'bg-slate-50 border-slate-200 text-slate-800'}">
+              <span class="font-semibold mono">${e.type}</span>
+              <div class="text-right">
+                <div class="font-bold">${e.count} case${e.count !== 1 ? 's' : ''}</div>
+                <div class="text-[10px] opacity-75">Risk: ${e.totalAmountAtRisk}</div>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // Settlement Verification
+        const svDiv = document.getElementById('rpt-settlement-verification');
+        const sv = data.settlementVerification || {};
+        const isBalanced = sv.status === 'BALANCED';
+        svDiv.innerHTML = `
+          <div class="space-y-3">
+            <div class="flex justify-between"><span class="text-slate-500">Gateway Net Total</span><span class="font-bold mono text-slate-900">${sv.gatewayNetTotal || '—'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-500">Bank Credit Total</span><span class="font-bold mono text-slate-900">${sv.bankCreditTotal || '—'}</span></div>
+            <div class="h-px bg-slate-200"></div>
+            <div class="flex justify-between"><span class="text-slate-500">Variance</span><span class="font-bold mono ${isBalanced ? 'text-emerald-600' : 'text-rose-600'}">${sv.variance || '—'}</span></div>
+            <div class="mt-3 p-2.5 rounded-lg border text-center font-bold ${isBalanced ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'}">
+              ${isBalanced ? '✓ BALANCED — Zero Mathematical Drift' : '⚠ DISCREPANCY DETECTED'}
+            </div>
+          </div>
+        `;
+
+        // Case Detail Table
+        const caseTbody = document.getElementById('report-case-table');
+        caseTbody.innerHTML = '';
+        const cases = data.caseDetail || [];
+        if (cases.length === 0) {
+          caseTbody.innerHTML = '<tr><td colspan="8" class="p-4 text-center text-slate-400">No discrepancy cases found.</td></tr>';
+        } else {
+          const statusColors = {
+            PENDING_REVIEW: 'bg-amber-100 text-amber-800 border-amber-200',
+            APPROVED:       'bg-emerald-100 text-emerald-800 border-emerald-200',
+            REJECTED:       'bg-rose-100 text-rose-800 border-rose-200',
+            ESCALATED:      'bg-purple-100 text-purple-800 border-purple-200',
+          };
+          cases.forEach((c, idx) => {
+            const tr = document.createElement('tr');
+            tr.className = idx % 2 === 0 ? '' : 'bg-slate-50/50';
+            tr.innerHTML = `
+              <td class="p-4 font-bold mono text-slate-900">${c.caseId}</td>
+              <td class="p-4 mono text-slate-700">${c.orderId}</td>
+              <td class="p-4"><span class="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 mono text-[10px] font-semibold">${c.type}</span></td>
+              <td class="p-4 font-bold mono text-rose-700">${c.amountAtRisk}</td>
+              <td class="p-4 mono text-slate-600">${c.expected}</td>
+              <td class="p-4 mono text-slate-600">${c.actual}</td>
+              <td class="p-4"><span class="px-1.5 py-0.5 rounded-full border text-[10px] font-semibold ${statusColors[c.status] || 'bg-slate-100 text-slate-600 border-slate-200'}">${c.status}</span></td>
+              <td class="p-4 mono text-slate-500">Stage ${c.stageIdentified}</td>
+            `;
+            caseTbody.appendChild(tr);
+          });
+        }
+      } catch (err) {
+        console.warn('[Report] Error loading report:', err);
+        document.getElementById('rpt-id').textContent = 'Error loading report — run reconciliation first';
+      }
+    }
+
+    // Download CSV export from /api/report?format=csv
+    async function downloadCsvReport() {
+      try {
+        const res = await fetch(`${API_BASE}/api/report?format=csv`, {
+          headers: { 'Authorization': `Bearer ${jwtToken}` }
+        });
+        if (!res.ok) throw new Error('CSV export failed: ' + res.status);
+        const csvText = await res.text();
+        const blob = new Blob([csvText], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ledgersense-reconciliation-report.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('CSV export failed. Please run reconciliation first and try again.');
+      }
+    }
+
 
     // Modal Controls
     const caseModal = document.getElementById('case-modal');

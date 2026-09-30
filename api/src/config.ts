@@ -11,4 +11,8 @@ export const config = {
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
   demoMerchantId: process.env.DEMO_MERCHANT_ID || 'm_demo_finathon',
   redisUrl: process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL || '',
+  awsRegion: process.env.AWS_REGION || 'us-east-1',
+  s3Bucket: process.env.S3_BUCKET_NAME || 'finathon-ledgersense-artifacts',
+  dynamoTable: process.env.DYNAMODB_TABLE_NAME || 'finathon-reconcile-locks',
+  bedrockModelId: process.env.BEDROCK_MODEL_ID || 'amazon.nova-pro-v1:0',
 };

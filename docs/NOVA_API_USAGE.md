@@ -12,13 +12,15 @@
 
 If the current provider contract disagrees with these project guides, verify the provider's official documentation and update the contract in a reviewed change before changing implementation. Do not invent fields, endpoints, or authentication headers.
 
-## Verified status as of 2026-10-01
+## Historical audit and current review-branch status (2026-10-01)
 
-- The configured base URL is `https://www.aczen.in/nova-api/v1`.
-- An unauthenticated `GET /health` returned HTTP 200 with `{"status":"ok"}` during review. This proves only that the public health endpoint was reachable; it does **not** verify a key, dataset access, imports, or persistence.
-- In the checked-in source at commit `ae36dbc`, `api/src/novaClient.ts` still returns fixed example records, and its status response can describe the connection as live without making an authenticated upstream request.
-- The frontend's `frontend/src/api/nova.ts` contains a static fallback that can be labelled as an Aczen/Nova source after an error. That fallback must never be used or presented as Nova data in production.
-- The user reports Nova may now be working. This Sandbox had no `NOVA_API_KEY`; the public Vercel `/api/nova/status` and `/api/health` routes returned 404 during review. That does not prove the Railway API is down, but neither does visible UI data prove a successful import: the checked-in client can return fixtures after an API failure. Before changing Nova code, identify the actual runtime `API_BASE`, make a successful authenticated read/import to the currently configured backend, and preserve the verified connector. Record clearly if this runtime verification cannot be performed.
+- The repository default base URL is `https://www.aczen.in/nova-api/v1`.
+- An unauthenticated `GET /health` returned HTTP 200 during review. This proves only that the public health endpoint was reachable; it does **not** verify a key, dataset access, imports, or persistence.
+- At the pre-review `acd14bd` snapshot, `api/src/novaClient.ts` returned fixed example records and reported an unverified live-looking status; the frontend also had a Nova-labelled static fallback. The user-provided screenshot independently confirmed the hard-coded payment/gateway arrays.
+- **Current review branch:** fixture rows are in `api/src/fixtures/novaDemo.ts`, require `NOVA_MODE=demo`, and are ignored when `NODE_ENV=production`. The default `NOVA_MODE` is `unconfigured`; guarded data routes return HTTP 503, and the frontend no longer fills failed requests with fixture rows. This is a safety correction, **not** a live Nova integration.
+- The FIN-11 Data Guide defines the server-side Bearer key, page size/rules, and known resources, but marks some row identifiers/fields for discovery. This Sandbox had no `NOVA_API_KEY`, so no authenticated provider read/import or persistence check was performed. The user's report that Nova may now work remains unverified here; do not overwrite their deployed connector or claim a live import based on health/fixture output.
+- The Vercel `/api/nova/status` and `/api/health` paths returned 404 on the public domain during the earlier review. The Vercel SPA rewrite was changed in this review branch, but has not been deployed or verified publicly.
+- The public static `web/index.html` was still pointing to older hashed assets, while the current Vite build emits different hashes. Root `npm run build` now synchronizes the current app into `web/`; Vercel must build from the repository root (not the `web` subdirectory) and receive the verified Railway origin as `VITE_API_BASE`. No hosting-setting change or production deployment was made.
 - Do not send a key in chat, commit it, include it in a screenshot, or put it in a `VITE_*`/browser variable.
 
 ## Production rules

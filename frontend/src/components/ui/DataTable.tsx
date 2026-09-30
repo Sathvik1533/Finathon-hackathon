@@ -15,56 +15,41 @@ interface DataTableProps<T> {
 }
 
 export function DataTable<T extends Record<string, unknown>>({
-  columns, rows, onRowClick, emptyMessage = 'No data found.', loading,
+  columns, rows, onRowClick, emptyMessage = 'No records were returned.', loading,
 }: DataTableProps<T>) {
+  const renderValue = (column: Column<T>, row: T) => typeof column.accessor === 'function'
+    ? column.accessor(row)
+    : String(row[column.accessor] ?? '—');
+
   if (loading) {
-    return (
-      <div className="animate-pulse space-y-2">
-        {[1, 2, 3].map(i => (
-          <div key={i} className="h-12 bg-slate-100 rounded-lg" />
-        ))}
-      </div>
-    );
+    return <div className="space-y-3" aria-live="polite" aria-label="Loading records">
+      {[1, 2, 3].map(i => <div key={i} className="h-16 animate-pulse border border-line bg-white" />)}
+    </div>;
   }
 
+  if (rows.length === 0) return <div className="border border-line bg-white px-5 py-10 text-center text-sm text-muted">{emptyMessage}</div>;
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
-      <table className="w-full text-left text-xs">
-        <thead className="bg-slate-50 border-b border-slate-200">
-          <tr>
-            {columns.map((col, i) => (
-              <th key={i} className={`px-4 py-3 text-[11px] font-semibold text-slate-500 uppercase tracking-wider ${col.className ?? ''}`}>
-                {col.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 bg-white">
-          {rows.length === 0 ? (
-            <tr>
-              <td colSpan={columns.length} className="px-4 py-8 text-center text-slate-400">
-                {emptyMessage}
-              </td>
-            </tr>
-          ) : (
-            rows.map((row, ri) => (
-              <tr
-                key={ri}
-                onClick={() => onRowClick?.(row)}
-                className={`${onRowClick ? 'cursor-pointer hover:bg-blue-50/40 transition-colors' : ''} ${ri % 2 === 0 ? '' : 'bg-slate-50/50'}`}
-              >
-                {columns.map((col, ci) => (
-                  <td key={ci} className={`px-4 py-3 text-slate-700 ${col.className ?? ''}`}>
-                    {typeof col.accessor === 'function'
-                      ? col.accessor(row)
-                      : String(row[col.accessor] ?? '—')}
-                  </td>
-                ))}
-              </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </div>
+    <>
+      <div className="hidden overflow-x-auto border border-line bg-white md:block">
+        <table className="w-full min-w-[680px] text-left text-sm">
+          <thead className="border-b border-line bg-paper">
+            <tr>{columns.map((column, index) => <th key={index} scope="col" className={`px-4 py-3 text-xs font-semibold text-muted ${column.className ?? ''}`}>{column.header}</th>)}</tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {rows.map((row, rowIndex) => <tr key={rowIndex} onClick={() => onRowClick?.(row)} onKeyDown={event => { if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(row); } }} tabIndex={onRowClick ? 0 : undefined} className={`${onRowClick ? 'cursor-pointer transition-colors hover:bg-paper focus-visible:bg-paper' : ''}`}>
+              {columns.map((column, columnIndex) => <td key={columnIndex} className={`px-4 py-3.5 align-middle text-ink ${column.className ?? ''}`}>{renderValue(column, row)}</td>)}
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+      <div className="space-y-3 md:hidden">
+        {rows.map((row, rowIndex) => <article key={rowIndex} role={onRowClick ? 'button' : undefined} tabIndex={onRowClick ? 0 : undefined} onClick={() => onRowClick?.(row)} onKeyDown={event => { if (onRowClick && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onRowClick(row); } }} className={`border border-line bg-white p-4 ${onRowClick ? 'cursor-pointer focus-visible:outline-forest' : ''}`}>
+          <dl className="space-y-3">{columns.map((column, columnIndex) => <div key={columnIndex} className="grid grid-cols-[minmax(6rem,0.75fr)_minmax(0,1.25fr)] gap-3 border-b border-line/70 pb-2 last:border-0 last:pb-0">
+            <dt className="text-xs font-medium text-muted">{column.header}</dt><dd className={`min-w-0 break-words text-right text-sm text-ink ${column.className ?? ''}`}>{renderValue(column, row)}</dd>
+          </div>)}</dl>
+        </article>)}
+      </div>
+    </>
   );
 }

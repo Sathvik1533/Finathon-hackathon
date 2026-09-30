@@ -29,6 +29,15 @@ let currentCases: DiscrepancyCase[] = [];
 let latestRun: any = null;
 const auditLogs: any[] = [];
 
+function requireConfiguredDataSource(res: Response): boolean {
+  const status = novaClient.getStatus();
+  if (status.dataMode === 'unconfigured') {
+    res.status(503).json({ error: status.source, dataMode: status.dataMode });
+    return false;
+  }
+  return true;
+}
+
 export function createAuditRecord(data: {
   action: string;
   user?: string;
@@ -91,38 +100,59 @@ export function mapBankTxs(bankTxs: any[]) {
       utr: b.utr_number,
       amount_paise: b.amount,
       credit_date: b.value_date,
-      settlement_ref: extractedRef || b.settlement_ref || 'SETTLE-901',
+      settlement_ref: extractedRef || b.settlement_ref || null,
     };
   });
 }
 
-export function mapSettlements(settlements: any[]) {
-  return settlements.map(s => ({
-    ...s,
-    id: s.settlement_id,
-    settlementId: s.settlement_id,
-    utr: s.utr_number,
-    totalGross: s.gross_amount,
-    totalFees: Math.round(s.fee_deductions / 1.18),
-    totalTax: s.fee_deductions - Math.round(s.fee_deductions / 1.18),
-    netAmount: s.net_payout,
-    bankCreditAmount: s.net_payout,
-    variance: 0,
-    status: 'MATCHED',
-    orderCount: s.transaction_count,
-    amount_paise: s.net_payout,
-    childOrders: [
-      { orderId: 'ORD-101', grossPaise: 100000, feePaise: 2000, taxPaise: 360, netPaise: 97640, status: 'MATCHED', stage: 1 },
-      { orderId: 'ORD-102', grossPaise: 250000, feePaise: 5000, taxPaise: 900, netPaise: 244100, status: 'MATCHED', stage: 1 },
-      { orderId: 'ORD-103', grossPaise: 150000, feePaise: 4000, taxPaise: 720, netPaise: 145280, status: 'FEE_MISMATCH', stage: 4 },
-    ],
-  }));
+export function mapSettlements(settlements: any[], bankTxs: any[] = [], gatewayTxs: any[] = []) {
+  return settlements.map(s => {
+    const bank = bankTxs.find(b => b.credit_debit === 'CR' && (
+      (s.utr_number && b.utr_number === s.utr_number) ||
+      (b.settlement_ref && b.settlement_ref === s.settlement_id) ||
+      (b.narration && s.settlement_id && b.narration.includes(s.settlement_id))
+    ));
+    const bankCreditAmount = bank ? bank.amount : null;
+    const variance = bankCreditAmount === null ? null : bankCreditAmount - s.net_payout;
+    const childOrders = gatewayTxs
+      .filter(gw => gw.settlement_id === s.settlement_id)
+      .map(gw => ({
+        orderId: gw.order_id,
+        grossPaise: gw.amount,
+        feePaise: gw.fee,
+        taxPaise: gw.tax,
+        netPaise: gw.net_amount,
+        status: gw.status,
+        ...(Number.isFinite(gw.stage) ? { stage: gw.stage } : {}),
+      }));
+
+    return {
+      ...s,
+      id: s.settlement_id,
+      settlementId: s.settlement_id,
+      utr: bank?.utr_number ?? null,
+      totalGross: s.gross_amount,
+      totalFees: Math.round(s.fee_deductions / 1.18),
+      totalTax: s.fee_deductions - Math.round(s.fee_deductions / 1.18),
+      netAmount: s.net_payout,
+      bankCreditAmount,
+      variance,
+      status: variance === null ? 'PENDING' : Math.abs(variance) < 1 ? 'MATCHED' : 'DISCREPANCY',
+      orderCount: childOrders.length,
+      amount_paise: s.net_payout,
+      childOrders,
+    };
+  });
 }
 
 // Seed initial state
 (async function init() {
   try {
     await initDatabaseSchema();
+    if (novaClient.getStatus().dataMode === 'unconfigured') {
+      console.info('No data source configured; reconciliation records are unavailable.');
+      return;
+    }
     const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
       novaClient.fetchPayments(),
       novaClient.fetchGatewayTransactions(),
@@ -167,7 +197,7 @@ app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
       backend: 'Railway / Render (Node.js Express + TypeScript)',
       database: 'Supabase PostgreSQL (NUMERIC(18,4) + RLS + Audit Triggers)',
       cache: 'Redis (Railway/Upstash with graceful in-memory fallback)',
-      dataStreams: 'Aczen Nova Financial API (https://www.aczen.in/nova-api/v1) + JP Morgan Synthetic Data Engine',
+      dataStreams: novaStatus,
     },
   });
 });
@@ -180,13 +210,13 @@ app.get(['/api/deployment/status', '/api/cloud/status'], (req: Request, res: Res
       frontend: {
         type: 'Single-Page Financial Cockpit (web/index.html)',
         hosting: 'Vercel (vercel.json edge deployment)',
-        routes: ['/', '/prototype'],
+        routes: ['/', '/login', '/dashboard', '/timeline', '/exceptions', '/settlement', '/nova', '/report'],
       },
       backend: {
         runtime: 'Node.js + Express + TypeScript',
         hosting: 'Railway / Render (railway.json, render.yaml, nixpacks.toml, Procfile)',
         port: config.port,
-        engine: '7-Stage Deterministic Reconciliation Engine (Sub-120ms, Zero Precision Loss)',
+        engine: '7-stage reconciliation engine; performance depends on the deployment and has not been measured here',
       },
       database: {
         provider: 'Supabase Managed PostgreSQL',
@@ -196,14 +226,10 @@ app.get(['/api/deployment/status', '/api/cloud/status'], (req: Request, res: Res
       },
       cacheAndLocking: redisCache.getStatus(),
       dataStreams: {
-        aczenNova: {
-          url: 'https://www.aczen.in/nova-api/v1',
-          endpoints: ['/payments', '/gateway-transactions', '/bank-transactions', '/settlements'],
-          unfairAdvantage: 'Real INR digital commerce accounting with contractual 2% MDR fees and 18% GST splits',
-        },
+        nova: novaClient.getStatus(),
         syntheticEngine: {
-          methodology: 'J.P. Morgan AI Research 7-step synthetic financial dataset generation (Assefa et al., ICAIF 2020)',
-          purpose: 'High-stress edge case simulation with network jitter, timing lags, and zero label leakage',
+          methodology: 'Bundled FIN-11 demonstration records',
+          purpose: 'UI and reconciliation-engine demonstration only; not production payment data',
         },
       },
     },
@@ -258,12 +284,13 @@ app.get('/api/auth/me', authenticate, (req: AuthenticatedRequest, res: Response)
   res.json({ user: req.user });
 });
 
-// 3. Nova Accounting API Feeds (B12: 4-Source Real Ingestion)
+// 3. Nova data adapter (currently backed by explicit FIN-11 demonstration records)
 app.get('/api/nova/status', (req: Request, res: Response) => {
   res.json(novaClient.getStatus());
 });
 
 app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (!requireConfiguredDataSource(res)) return;
   try {
     const [rawPayments, rawGatewayTxs, rawBankTxs, rawSettlements] = await Promise.all([
       novaClient.fetchPayments(),
@@ -275,7 +302,7 @@ app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: Authenticated
     const payments = mapPayments(rawPayments);
     const gatewayTransactions = mapGatewayTxs(rawGatewayTxs);
     const bankTransactions = mapBankTxs(rawBankTxs);
-    const settlements = mapSettlements(rawSettlements);
+    const settlements = mapSettlements(rawSettlements, rawBankTxs, rawGatewayTxs);
 
     auditLogs.unshift(createAuditRecord({
       action: 'NOVA_FEED_SYNC',
@@ -284,7 +311,7 @@ app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: Authenticated
     }));
 
     res.json({
-      message: 'Nova financial data streams ingested successfully',
+      message: novaClient.getStatus().dataMode === 'simulated' ? 'Demonstration records returned; live Nova ingestion is not implemented' : 'Source records returned',
       counts: {
         payments: payments.length,
         gatewayTransactions: gatewayTransactions.length,
@@ -296,7 +323,8 @@ app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: Authenticated
       bankTransactions,
       settlements,
       syncedAt: new Date().toISOString(),
-      source: 'Aczen Nova Financial API',
+      source: novaClient.getStatus().source,
+      dataMode: novaClient.getStatus().dataMode,
       sample: {
         payments: payments.slice(0, 2),
         gatewayTransactions: gatewayTransactions.slice(0, 2),
@@ -315,6 +343,7 @@ app.all(['/api/payments', '/payments'], authenticate, async (req: AuthenticatedR
     await persistAuditLog('STREAM_PAYMENTS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} ERP payments`);
     return res.status(201).json({ count: mapped.length, payments: mapped, message: 'Payments successfully ingested into stream' });
   }
+  if (!requireConfiguredDataSource(res)) return;
   const rawPayments = await novaClient.fetchPayments();
   res.json({ count: rawPayments.length, payments: mapPayments(rawPayments) });
 });
@@ -326,6 +355,7 @@ app.all(['/api/gateway-transactions', '/gateway-transactions'], authenticate, as
     await persistAuditLog('STREAM_GATEWAY_TXNS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} gateway captures`);
     return res.status(201).json({ count: mapped.length, gatewayTransactions: mapped, message: 'Gateway transactions successfully ingested into stream' });
   }
+  if (!requireConfiguredDataSource(res)) return;
   const rawGw = await novaClient.fetchGatewayTransactions();
   res.json({ count: rawGw.length, gatewayTransactions: mapGatewayTxs(rawGw) });
 });
@@ -337,12 +367,14 @@ app.all(['/api/bank-transactions', '/bank-transactions'], authenticate, async (r
     await persistAuditLog('STREAM_BANK_TXNS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} bank statement credits`);
     return res.status(201).json({ count: mapped.length, bankTransactions: mapped, message: 'Bank transactions successfully ingested into stream' });
   }
+  if (!requireConfiguredDataSource(res)) return;
   const rawBank = await novaClient.fetchBankTransactions();
   res.json({ count: rawBank.length, bankTransactions: mapBankTxs(rawBank) });
 });
 
 // 4. 7-Stage Reconciliation Run (B6) with Distributed Job Locking & Cache
 app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (!requireConfiguredDataSource(res)) return;
   // Acquire distributed mutex lock to prevent concurrent reconciliation runs
   const lock = await redisCache.acquireLock('reconciliation:run', 30);
   if (!lock.acquired) {
@@ -403,6 +435,7 @@ export async function ensureCurrentRun(): Promise<void> {
 
 // Cache query endpoints for run summaries
 app.get('/api/reconcile/latest', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (!requireConfiguredDataSource(res)) return;
   await ensureCurrentRun();
   const cached = await redisCache.getLatestRunSummary();
   if (cached) {
@@ -433,6 +466,7 @@ app.get('/api/reconcile/summary/:runId', authenticate, async (req: Authenticated
 
 // 5. Exception Management & Review Cases (B8)
 app.get('/api/cases', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (!requireConfiguredDataSource(res)) return;
   await ensureCurrentRun();
   const cachedLatest = await redisCache.getLatestRunSummary();
   res.json({
@@ -445,6 +479,7 @@ app.get('/api/cases', authenticate, async (req: AuthenticatedRequest, res: Respo
 
 
 app.get('/api/cases/:id', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (!requireConfiguredDataSource(res)) return;
   await ensureCurrentRun();
   const caseItem = currentCases.find((c) => c.caseId === req.params.id);
   if (!caseItem) {
@@ -455,6 +490,7 @@ app.get('/api/cases/:id', authenticate, async (req: AuthenticatedRequest, res: R
 });
 
 app.post('/api/cases/:id/decision', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (!requireConfiguredDataSource(res)) return;
   const { decision, reason, rationale } = req.body;
   if (!['APPROVED', 'REJECTED', 'ESCALATED'].includes(decision)) {
     res.status(400).json({ error: 'Decision must be APPROVED, REJECTED, or ESCALATED' });
@@ -499,9 +535,13 @@ app.all(['/api/settlements', '/settlements'], authenticate, async (req: Authenti
     await persistAuditLog('STREAM_SETTLEMENTS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} settlement batches`);
     return res.status(201).json({ count: mapped.length, settlements: mapped, message: 'Settlements successfully ingested into stream' });
   }
+  if (!requireConfiguredDataSource(res)) return;
   const rawSettlements = await novaClient.fetchSettlements();
-  const rawBankTxs = await novaClient.fetchBankTransactions();
-  const settlements = mapSettlements(rawSettlements);
+  const [rawBankTxs, rawGatewayTxs] = await Promise.all([
+    novaClient.fetchBankTransactions(),
+    novaClient.fetchGatewayTransactions(),
+  ]);
+  const settlements = mapSettlements(rawSettlements, rawBankTxs, rawGatewayTxs);
   const bankTransactions = mapBankTxs(rawBankTxs);
   res.json({
     count: settlements.length,
@@ -521,6 +561,7 @@ app.get('/api/audit-logs', authenticate, (req: AuthenticatedRequest, res: Respon
 // 8. Reconciliation Report — Module 11: Full FIN-11 Compliance Report
 // Returns a structured, export-ready reconciliation report covering all 11 problem statement modules.
 app.get('/api/report', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (!requireConfiguredDataSource(res)) return;
   const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
     novaClient.fetchPayments(),
     novaClient.fetchGatewayTransactions(),
@@ -578,7 +619,6 @@ app.get('/api/report', authenticate, async (req: AuthenticatedRequest, res: Resp
       totalSettled: `₹${(run.totalSettledPaise / 100).toFixed(2)}`,
       totalSettledAmount: `₹${(run.totalSettledPaise / 100).toFixed(2)}`,
       totalAmountAtRisk: `₹${(run.totalAmountAtRiskPaise / 100).toFixed(2)}`,
-      falseApprovalRate: '0.0000%',
     },
     // Exception breakdown by type
     exceptionBreakdown: Object.entries(byType).map(([type, data]) => ({

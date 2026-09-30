@@ -4,7 +4,7 @@
 [![CD Deployment Pipeline](https://github.com/Sathvik1533/Finathon-hackathon/actions/workflows/cd.yml/badge.svg)](https://github.com/Sathvik1533/Finathon-hackathon/actions/workflows/cd.yml)
 [![CodeQL Security Analysis](https://github.com/Sathvik1533/Finathon-hackathon/actions/workflows/codeql.yml/badge.svg)](https://github.com/Sathvik1533/Finathon-hackathon/actions/workflows/codeql.yml)
 
-Automated Continuous Integration and Continuous Deployment (CI/CD) pipeline for the Finathon Hackathon project.
+LedgerSense is the FIN-11 payment-reconciliation workspace: a Vite/React frontend compares order, payment-gateway and bank records through an Express API and routes unmatched items for review. The frontend source lives in `frontend/`; the repository-root build compiles it and synchronizes the static Vercel bundle into `web/`. See the [redesign handoff](docs/LEDGERSENSE_HANDOFF.md) and [design direction](ideas.md) before making UI changes.
 
 ---
 
@@ -62,6 +62,8 @@ make run       # Start local development server (http://localhost:8000)
 
 ## Deployment Secrets Configuration
 
+For Vercel, use the repository root as the project root so `npm run build` compiles `frontend/` and refreshes the `web/` bundle. Set `VITE_API_BASE` to the verified backend origin. Selecting `web/` directly skips the root build; see [`deploy/README.md`](deploy/README.md) for the preview-first setup.
+
 To connect the CD pipeline with your cloud hosting or webhook endpoints, configure the following repository secrets under **Settings > Secrets and variables > Actions**:
 
 | Secret Name | Description | Optional / Required |
@@ -82,5 +84,8 @@ Implementation documentation for data onboarding and synthetic generation, datab
 - [AWS deployment guide](docs/fin11/FIN-11_6_Deployment_Guide_AWS.md)
 - [Antigravity UI/UX and end-to-end build brief](docs/ANTIGRAVITY_REBUILD_BRIEF.md)
 - [Nova API source-of-truth notice](docs/NOVA_API_USAGE.md)
+- [Current redesign and source-mode handoff](docs/LEDGERSENSE_HANDOFF.md)
+- [Antigravity prompt: verified dynamic data, no mock UI](docs/ANTIGRAVITY_NO_MOCK_DATA_PROMPT.md)
+- [LedgerSense design direction and typography](ideas.md)
 
 See the index for the full guide list and suggested reading order.

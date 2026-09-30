@@ -10,7 +10,7 @@ Designed for instant live demonstration in under 3 minutes.
 
 | Service | Host | 1-Click Config File | Description |
 |---|---|---|---|
-| **Frontend Web Terminal** | **Vercel** | `vercel.json`, `web/vercel.json` | High-performance static fintech UI with real-time SSE |
+| **Frontend Web Terminal** | **Vercel** | `frontend/`, root `vercel.json`, `scripts/sync-web-build.mjs` | Vite/React UI; root build synchronizes its output into `web/` for static serving |
 | **Backend API Engine** | **Railway** | `railway.json`, `nixpacks.toml`, `Procfile` | Node.js Express TypeScript API with 7-stage engine |
 | **Distributed Cache & Lock** | **Railway** | Managed via `REDIS_URL` | Fast in-memory / Redis cache for runs and mutex locks |
 | **Database** | **Supabase** | `supabase/migrations/` | PostgreSQL with Row-Level Security & arbitrary precision |
@@ -29,9 +29,10 @@ Designed for instant live demonstration in under 3 minutes.
 2. **Frontend on Vercel**:
    - Go to [Vercel Dashboard](https://vercel.com/new).
    - Import `Sathvik1533/Finathon-hackathon`.
-   - Root directory is automatically handled by `vercel.json` (`outputDirectory: web`).
-   - Click **Deploy**!
-   - In the deployed web UI, the status pill automatically detects the backend, or you can click the badge to paste your Railway URL.
+   - Set **Root Directory** to the repository root (`.`), not `web`. The `web/` folder is generated static output; selecting it skips the root build and serves a stale bundle.
+   - Let the repository `npm run build` script build the API and frontend, then synchronize the Vite bundle to `web/`.
+   - Set `VITE_API_BASE` in the Vercel project environment to the **verified Railway API origin**. Do not use a placeholder or put the Nova key in a `VITE_*` variable.
+   - First deploy a preview and verify `/`, `/login`, direct workspace routes, `VITE_API_BASE`, and the API's source mode. Production deploy only after review.
 
 ---
 

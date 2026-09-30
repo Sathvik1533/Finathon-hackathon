@@ -88,7 +88,7 @@ export const ExceptionsPage: React.FC = () => {
           rows={cases as any[]}
           onRowClick={(row) => setSelected(row as DiscrepancyCase)}
           loading={loading}
-          emptyMessage="No discrepancies flagged. System is in 100% balanced zero-drift state."
+          emptyMessage="No exception records were returned by the API. This does not establish that all records are matched."
         />
       </motion.div>
 

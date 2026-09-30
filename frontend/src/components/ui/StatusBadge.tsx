@@ -13,6 +13,8 @@ const variantStyles: Record<string, string> = {
   SETTLED:     'bg-emerald-50 text-emerald-700 border-emerald-200',
   APPROVED:    'bg-emerald-50 text-emerald-700 border-emerald-200',
   MATCHED:     'bg-emerald-50 text-emerald-700 border-emerald-200',
+  DISCREPANCY: 'bg-rose-50 text-rose-700 border-rose-200',
+  DISCREPANCY_DETECTED: 'bg-rose-50 text-rose-700 border-rose-200',
   PENDING_REVIEW: 'bg-amber-50 text-amber-700 border-amber-200',
   OPEN:        'bg-amber-50 text-amber-700 border-amber-200',
   PENDING:     'bg-amber-50 text-amber-700 border-amber-200',

@@ -1,14 +1,17 @@
-import React, { createContext, useContext, useState } from 'react';
-import { login as apiLogin } from '../api/auth';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { getCurrentUser, login as apiLogin } from '../api/auth';
 
 export interface AuthUser {
   token: string;
   username: string;
   role: string;
+  userId?: string;
+  merchantId?: string;
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
+  ready: boolean;
   login(username: string, password: string): Promise<void>;
   logout(): void;
 }
@@ -17,46 +20,69 @@ const AuthContext = createContext<AuthContextValue>(null!);
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    try {
-      const stored = localStorage.getItem('ledgersense_auth');
-      if (stored) return JSON.parse(stored);
-    } catch {
-      // ignore
-    }
-    // Seamless default demo user for instant live evaluation
-    const defaultDemoUser: AuthUser = {
-      token: 'jwt-demo-session-token',
-      username: 'priya',
-      role: 'FINOPS_ADMIN',
-    };
-    try {
-      localStorage.setItem('ledgersense_auth', JSON.stringify(defaultDemoUser));
-    } catch {
-      // ignore
-    }
-    return defaultDemoUser;
-  });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [ready, setReady] = useState(false);
 
-  const login = async (username: string, password: string) => {
+  useEffect(() => {
+    let active = true;
+    const restoreSession = async () => {
+      let saved: AuthUser | null = null;
+      try {
+        const raw = window.localStorage.getItem('ledgersense_auth');
+        if (raw) saved = JSON.parse(raw) as AuthUser;
+      } catch {
+        window.localStorage.removeItem('ledgersense_auth');
+      }
+
+      if (!saved?.token) {
+        if (active) setReady(true);
+        return;
+      }
+
+      try {
+        const response = await getCurrentUser(saved.token);
+        const restored: AuthUser = {
+          token: saved.token,
+          username: response.user.username,
+          role: response.user.role,
+          userId: response.user.userId,
+          merchantId: response.user.merchantId,
+        };
+        if (active) {
+          setUser(restored);
+          window.localStorage.setItem('ledgersense_auth', JSON.stringify(restored));
+        }
+      } catch {
+        window.localStorage.removeItem('ledgersense_auth');
+        if (active) setUser(null);
+      } finally {
+        if (active) setReady(true);
+      }
+    };
+
+    void restoreSession();
+    return () => { active = false; };
+  }, []);
+
+  const login = useCallback(async (username: string, password: string) => {
     const data = await apiLogin(username, password);
-    const u: AuthUser = {
+    const nextUser: AuthUser = {
       token: data.token,
-      username: data.user?.username ?? username,
-      role: data.user?.role ?? 'admin',
+      username: data.user.username,
+      role: data.user.role,
+      userId: data.user.userId,
+      merchantId: data.user.merchantId,
     };
-    setUser(u);
-    localStorage.setItem('ledgersense_auth', JSON.stringify(u));
-  };
+    window.localStorage.setItem('ledgersense_auth', JSON.stringify(nextUser));
+    setUser(nextUser);
+    setReady(true);
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
+    window.localStorage.removeItem('ledgersense_auth');
     setUser(null);
-    localStorage.removeItem('ledgersense_auth');
-  };
+    setReady(true);
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, ready, login, logout }}>{children}</AuthContext.Provider>;
 };

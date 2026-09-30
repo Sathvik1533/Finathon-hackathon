@@ -1,212 +1,117 @@
-import React, { useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
 import { PageShell } from '../components/layout/PageShell';
-import { KpiCard } from '../components/ui/KpiCard';
-import { StatusBadge } from '../components/ui/StatusBadge';
-import { ModuleCoverageRow } from '../components/ui/ModuleCoverageRow';
+import { DataTable } from '../components/ui/DataTable';
 import { useReport } from '../hooks/useReport';
-import { downloadReportCsv, getCsvDownloadUrl } from '../api/report';
+import { downloadReportCsv } from '../api/report';
 import { useAuth } from '../context/AuthContext';
-import { buttonPressProps, cardHoverProps, containerStaggerVariants, itemFadeInVariants } from '../utils/motion';
 
 const MODULE_LABELS: Record<string, string> = {
-  'M1-InternalTransactionRecords': 'M1 · Internal Transaction Records',
-  'M2-PaymentGatewayRecords':      'M2 · Payment Gateway Records',
-  'M3-BankSettlementRecords':      'M3 · Bank Settlement Records',
-  'M4-TransactionIDMatching':      'M4 · Transaction-ID Matching',
-  'M5-ReferenceMatching':          'M5 · Reference Matching',
-  'M6-PartialMatching':            'M6 · Partial Matching',
-  'M7-FeeCalculation':             'M7 · Fee Calculation',
-  'M8-RefundReversalHandling':     'M8 · Refund/Reversal Handling',
-  'M9-SettlementMatching':         'M9 · Settlement Matching',
-  'M10-ExceptionManagement':       'M10 · Exception Management',
-  'M11-ReconciliationReport':      'M11 · Reconciliation Report',
+  'M1-InternalTransactionRecords': 'M1 · Internal transaction records',
+  'M2-PaymentGatewayRecords': 'M2 · Payment-gateway records',
+  'M3-BankSettlementRecords': 'M3 · Bank settlement records',
+  'M4-TransactionIDMatching': 'M4 · Transaction-ID matching',
+  'M5-ReferenceMatching': 'M5 · Reference matching',
+  'M6-PartialMatching': 'M6 · Partial matching',
+  'M7-FeeCalculation': 'M7 · Fee calculation',
+  'M8-RefundReversalHandling': 'M8 · Refund and reversal handling',
+  'M9-SettlementMatching': 'M9 · Settlement matching',
+  'M10-ExceptionManagement': 'M10 · Exception management',
+  'M11-ReconciliationReport': 'M11 · Reconciliation report',
 };
+
+const moneyText = (value: string | number | null | undefined) => value == null || value === '' ? 'Not returned' : String(value);
 
 export const ReportPage: React.FC = () => {
   const { user } = useAuth();
   const { report, loading, error, refresh } = useReport();
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState('');
 
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { void refresh(); }, [refresh]);
 
-  const handleCsvDownload = async () => {
+  const exportCsv = async () => {
     if (!user?.token) return;
+    setExporting(true); setExportError('');
     try {
-      const csvText = await downloadReportCsv(user.token);
-      const blob = new Blob([csvText], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `ledgersense-${report?.reportId || 'report'}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      const fallbackUrl = getCsvDownloadUrl(user.token);
-      const a = document.createElement('a');
-      a.href = fallbackUrl;
-      a.download = `ledgersense-${report?.reportId || 'report'}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    }
+      const csv = await downloadReportCsv(user.token);
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `ledgersense-${report?.reportId ?? 'report'}.csv`;
+      document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url);
+    } catch (caught) { setExportError(caught instanceof Error ? caught.message : 'The report export failed.'); }
+    finally { setExporting(false); }
   };
 
+  const totalOrders = report?.summary.totalOrdersIngested ?? 0;
+  const matched = report?.summary.cleanMatchedOrders ?? 0;
+  const matchRate = totalOrders > 0 ? `${((matched / totalOrders) * 100).toFixed(1)}%` : 'Not available';
+  const moduleEntries = Object.entries(report?.moduleCoverage ?? {});
+
+  const caseColumns = [
+    { header: 'Case', accessor: (row: NonNullable<typeof report>['caseDetail'][number]) => <span className="font-mono text-xs">{row.caseId}</span> },
+    { header: 'Order', accessor: (row: NonNullable<typeof report>['caseDetail'][number]) => <span className="font-mono text-xs">{row.orderId}</span> },
+    { header: 'Type', accessor: (row: NonNullable<typeof report>['caseDetail'][number]) => row.type.replace(/_/g, ' ').toLowerCase() },
+    { header: 'Amount at risk', accessor: (row: NonNullable<typeof report>['caseDetail'][number]) => <span className="font-mono text-rust">{row.amountAtRisk}</span> },
+    { header: 'Status', accessor: (row: NonNullable<typeof report>['caseDetail'][number]) => row.status.replace(/_/g, ' ').toLowerCase() },
+  ];
+
   return (
-    <PageShell
-      title="Module 11 · Reconciliation Report"
-      subtitle="Complete system compliance and mathematical audit report across all 11 FIN-11 modules"
-      actions={
-        <div className="flex gap-2.5">
-          <motion.button
-            {...buttonPressProps}
-            onClick={refresh}
-            className="px-4 py-2 border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-full text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-          >
-            ↺ Refresh
-          </motion.button>
-          <motion.button
-            {...buttonPressProps}
-            onClick={handleCsvDownload}
-            className="px-5 py-2 bg-[#006241] hover:bg-[#004e34] text-white rounded-full text-xs font-semibold shadow-pill transition-colors flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>↓</span>
-            <span>Export CSV</span>
-          </motion.button>
-        </div>
-      }
-    >
-      {error && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-4 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700"
-        >
-          {error}
-        </motion.div>
-      )}
+    <PageShell title="Reconciliation report" subtitle="A report snapshot returned by the API. Its module labels are not an external audit or compliance certification." actions={<>
+      <button type="button" onClick={() => void refresh()} disabled={loading} className="touch-target border border-line bg-white px-4 text-sm font-semibold hover:border-ink disabled:opacity-50">{loading ? 'Refreshing…' : 'Refresh'}</button>
+      <button type="button" onClick={() => void exportCsv()} disabled={exporting} className="touch-target bg-forest px-5 text-sm font-semibold text-white hover:bg-ink disabled:opacity-50">{exporting ? 'Preparing…' : 'Export CSV'}</button>
+    </>}>
+      {(error || exportError) && <div role="alert" className="border-l-2 border-rust bg-[#faf2ee] px-4 py-3 text-sm leading-6 text-rust">{error || exportError}</div>}
+      {loading && !report && <div className="space-y-3" aria-live="polite"><div className="h-20 animate-pulse border border-line bg-white"/><div className="h-40 animate-pulse border border-line bg-white"/></div>}
+      {!loading && !report && <div className="border border-line bg-white p-6 text-sm leading-6 text-muted">No report data was returned. Check the API connection, then refresh to try again.</div>}
 
-      {loading && (
-        <div className="animate-pulse space-y-4">
-          {[1, 2, 3].map(i => <div key={i} className="h-20 bg-slate-100 rounded-2xl" />)}
-        </div>
-      )}
+      {report && <div className="space-y-7">
+        <section className="flex flex-col justify-between gap-4 border-y border-line bg-white px-5 py-5 sm:flex-row sm:items-center sm:px-6">
+          <div><p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Report reference</p><p className="mt-2 break-all font-mono text-lg font-semibold">{report.reportId}</p><p className="mt-2 text-sm text-muted">Generated by {report.generatedBy || 'API'} · {new Date(report.generatedAt).toLocaleString('en-IN')}</p></div>
+          <p className="max-w-md text-sm leading-6 text-muted">Values reflect the report response at the time shown. Confirm data-source mode and record provenance before relying on the figures.</p>
+        </section>
 
-      {report && (
-        <motion.div
-          variants={containerStaggerVariants}
-          initial="hidden"
-          animate="visible"
-          className="space-y-6"
-        >
-          {/* Report ID Forest Green Banner */}
-          <motion.div
-            variants={itemFadeInVariants}
-            className="bg-[#006241] text-white rounded-3xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-          >
-            <div className="space-y-1">
-              <div className="text-xs text-emerald-200/90 font-medium uppercase tracking-wider">Report Identifier</div>
-              <div className="font-mono text-xl font-bold tracking-tight text-white">{report.reportId}</div>
-              <div className="text-xs text-emerald-100/80">FIN-11 Problem Statement Certified · Zero Penny Rounding Drift</div>
-            </div>
-            <div className="text-right">
-              <div className="text-xs text-emerald-200/90 uppercase tracking-wider">Generated At</div>
-              <div className="text-xs font-mono text-white mt-0.5">{new Date(report.generatedAt).toLocaleString()}</div>
-            </div>
-          </motion.div>
+        <section className="grid gap-0 border-y border-line bg-white sm:grid-cols-2 lg:grid-cols-4" aria-label="Report summary">
+          {[
+            ['Orders ingested', totalOrders.toLocaleString('en-IN')],
+            ['Clean matches', matched.toLocaleString('en-IN')],
+            ['Match share', matchRate],
+            ['Cases needing review', (report.summary.discrepanciesFound ?? 0).toLocaleString('en-IN')],
+          ].map(([label, value], index) => <div key={label} className={`px-4 py-5 sm:px-5 ${index ? 'border-t border-line sm:border-l sm:border-t-0' : ''}`}><p className="text-sm text-muted">{label}</p><p className="mt-3 text-2xl font-semibold tracking-[-0.03em]">{value}</p></div>)}
+        </section>
 
-          {/* KPI Summary Cards with Hover Lift */}
-          <motion.div
-            variants={itemFadeInVariants}
-            className="grid grid-cols-2 md:grid-cols-4 gap-4"
-          >
-            <KpiCard
-              title="Total Orders"
-              value={report.summary.totalOrdersIngested}
-              delta="Evaluated in run"
-              color="slate"
-            />
-            <KpiCard
-              title="Settled Volume"
-              value={report.summary.totalSettled}
-              delta="Credited to merchant"
-              color="emerald"
-            />
-            <KpiCard
-              title="Amount at Risk"
-              value={report.summary.totalAmountAtRisk}
-              delta="Pending resolution"
-              color="rose"
-            />
-            <KpiCard
-              title="Discrepancies"
-              value={report.summary.discrepanciesFound}
-              delta="Actionable cases"
-              color="amber"
-            />
-          </motion.div>
+        <section className="grid gap-7 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="border border-line bg-white p-5 sm:p-6">
+            <div className="border-b border-line pb-4"><h2 className="text-base font-semibold">Module status returned by API</h2><p className="mt-1 text-sm text-muted">Status labels describe this implementation response only.</p></div>
+            <div className="divide-y divide-line">
+              {moduleEntries.map(([key, details]) => <div key={key} className="flex flex-col justify-between gap-2 py-3 sm:flex-row sm:items-start">
+                <div><p className="text-sm font-medium">{MODULE_LABELS[key] || key}</p><p className="mt-1 text-xs leading-5 text-muted">{details.method || details.algorithm || details.schedule || details.recordCount != null ? [details.method, details.algorithm, details.schedule, details.recordCount != null ? `${details.recordCount} records` : null].filter(Boolean).join(' · ') : 'No detail supplied.'}</p></div>
+                <span className={`shrink-0 self-start border px-2.5 py-1 text-xs font-semibold ${details.status === 'IMPLEMENTED' ? 'border-[#c9dfd3] bg-[#f2f7f4] text-forest' : details.status === 'PARTIAL' ? 'border-[#e6d5b0] bg-[#f6f0e3] text-amber' : 'border-line bg-paper text-muted'}`}>{details.status.replace(/_/g, ' ').toLowerCase()}</span>
+              </div>)}
+              {!moduleEntries.length && <p className="py-5 text-sm text-muted">No module status details were returned.</p>}
+            </div>
+          </div>
 
-          {/* 11 Modules Implementation Table */}
-          <motion.div
-            variants={itemFadeInVariants}
-            className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-card space-y-4"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h2 className="text-base font-bold text-slate-900">FIN-11 Module Verification Matrix</h2>
-              <span className="text-xs font-bold text-[#006241] bg-[#e6f7ef] border border-[#c1ebd5] px-3 py-1 rounded-full">
-                11 / 11 Modules Certified
-              </span>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {Object.entries(report.moduleCoverage).map(([key, details]) => (
-                <ModuleCoverageRow
-                  key={key}
-                  label={MODULE_LABELS[key] || key}
-                  status={details.status}
-                  detail={details.method || details.recordCount || details.algorithm || details.reportId || ''}
-                />
-              ))}
-            </div>
-          </motion.div>
+          <div className="border border-line bg-white p-5 sm:p-6">
+            <div className="border-b border-line pb-4"><h2 className="text-base font-semibold">Settlement comparison</h2><p className="mt-1 text-sm text-muted">Values returned by report calculation</p></div>
+            <dl className="mt-2 divide-y divide-line">
+              {[
+                ['API status', report.settlementVerification.status.replace(/_/g, ' ').toLowerCase()],
+                ['Gateway net', moneyText(report.settlementVerification.gatewayNetTotal)],
+                ['Bank credit', moneyText(report.settlementVerification.bankCreditTotal)],
+                ['Variance', moneyText(report.settlementVerification.variance)],
+                ['Settled volume', moneyText(report.summary.totalSettled)],
+                ['Amount at risk', moneyText(report.summary.totalAmountAtRisk)],
+              ].map(([label, value]) => <div key={label} className="flex justify-between gap-4 py-3 text-sm"><dt className="text-muted">{label}</dt><dd className="text-right font-mono tabular-nums">{value}</dd></div>)}
+            </dl>
+          </div>
+        </section>
 
-          {/* Settlement Verification Box */}
-          <motion.div
-            variants={itemFadeInVariants}
-            {...cardHoverProps}
-            className="bg-white border border-slate-200/80 rounded-3xl p-6 shadow-card space-y-3"
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-900">Bank Settlement Mathematical Verification</h3>
-              <StatusBadge status={report.settlementVerification.status} />
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-              <div className="p-3 bg-slate-50 rounded-2xl">
-                <span className="text-slate-400 block text-[11px]">Expected Payout</span>
-                <span className="font-mono font-bold text-slate-800 text-sm">
-                  {report.settlementVerification.gatewayNetTotal}
-                </span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-2xl">
-                <span className="text-slate-400 block text-[11px]">Actual Bank Credit</span>
-                <span className="font-mono font-bold text-[#006241] text-sm">
-                  {report.settlementVerification.bankCreditTotal}
-                </span>
-              </div>
-              <div className="p-3 bg-slate-50 rounded-2xl">
-                <span className="text-slate-400 block text-[11px]">Total Variance</span>
-                <span className="font-mono font-bold text-[#00c070] text-sm">
-                  {report.settlementVerification.variance}
-                </span>
-              </div>
-              <div className="p-3 bg-[#e6f7ef] border border-[#c1ebd5] rounded-2xl">
-                <span className="text-[#006241] block text-[11px] font-semibold">Ledger Match Rate</span>
-                <span className="font-mono font-bold text-[#006241] text-sm">100.0%</span>
-              </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
+        <section className="border border-line bg-white p-4 sm:p-6">
+          <div className="mb-4"><h2 className="text-base font-semibold">Exception detail</h2><p className="mt-1 text-sm text-muted">Case records included in this report response.</p></div>
+          <DataTable columns={caseColumns as any} rows={report.caseDetail as any[]} emptyMessage="No exception details were returned in this report." />
+        </section>
+      </div>}
     </PageShell>
   );
 };

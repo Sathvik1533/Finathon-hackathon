@@ -17,6 +17,7 @@ export const config = {
   databaseUrl: productionSecret('DATABASE_URL', ''),
   novaApiKey: process.env.NOVA_API_KEY || '',
   novaBaseUrl: process.env.NOVA_BASE_URL || 'https://www.aczen.in/nova-api/v1',
+  novaMode: process.env.NOVA_MODE?.trim().toLowerCase() || 'unconfigured',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
   demoMerchantId: process.env.DEMO_MERCHANT_ID || 'm_demo_finathon',

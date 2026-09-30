@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { DiscrepancyCase } from '../../api/reconcile';
 import { StatusBadge } from './StatusBadge';
 import { DecisionForm } from '../forms/DecisionForm';
-import { CANONICAL_EASE } from '../../utils/motion';
 
 interface ExceptionDrawerProps {
   case_: DiscrepancyCase | null;
@@ -11,121 +10,76 @@ interface ExceptionDrawerProps {
   onDecision: (caseId: string, decision: 'APPROVED' | 'REJECTED' | 'ESCALATED', rationale: string) => Promise<void>;
 }
 
+const money = (value: number) => `₹${(value / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
 export const ExceptionDrawer: React.FC<ExceptionDrawerProps> = ({ case_, onClose, onDecision }) => {
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setError('');
+    if (!case_) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape' && !submitting) onClose(); };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [case_, onClose, submitting]);
 
   const handleDecision = async (decision: 'APPROVED' | 'REJECTED' | 'ESCALATED', rationale: string) => {
     if (!case_) return;
-    setSubmitting(true);
+    setSubmitting(true); setError('');
     try {
       await onDecision(case_.caseId, decision, rationale);
       onClose();
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'The decision could not be saved.');
+    } finally { setSubmitting(false); }
   };
-
-  const paise = (v: number) => `₹${(v / 100).toFixed(2)}`;
 
   return (
     <AnimatePresence>
-      {case_ && (
-        <>
-          {/* Backdrop with Fade */}
-          <motion.div
-            key="drawer-backdrop"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-40"
-            onClick={onClose}
-          />
+      {case_ && <>
+        <motion.button key="exception-backdrop" type="button" aria-label="Close exception details" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-40 cursor-default bg-ink/35" />
+        <motion.section key={`exception-${case_.caseId}`} role="dialog" aria-modal="true" aria-labelledby="exception-title" initial={{ y: '8%' }} animate={{ y: 0 }} exit={{ y: '8%' }} transition={{ duration: 0.2 }} className="fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col border-t border-line bg-white pb-[env(safe-area-inset-bottom)] shadow-soft sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-lg sm:border-l sm:border-t-0">
+          <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-4 sm:px-6">
+            <div className="min-w-0"><p className="text-xs text-muted">Exception detail</p><div className="mt-1 flex flex-wrap items-center gap-2"><h2 id="exception-title" className="font-mono text-base font-semibold">{case_.caseId}</h2><StatusBadge status={case_.status} /></div></div>
+            <button type="button" onClick={onClose} disabled={submitting} className="touch-target grid shrink-0 place-items-center border border-line text-muted hover:text-ink disabled:opacity-50" aria-label="Close exception detail"><svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+          </header>
 
-          {/* Drawer with Slide-In matching DESIGN-BIBLE Part 5 */}
-          <motion.div
-            key="drawer-panel"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ duration: 0.35, ease: CANONICAL_EASE }}
-            className="fixed right-0 top-0 h-full w-full max-w-[480px] bg-white border-l border-slate-200 shadow-2xl z-50 flex flex-col"
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-[#f4f5f7]">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-slate-900 font-mono">{case_.caseId}</h2>
-                  <span className="text-[10px] font-mono uppercase bg-[#e6f7ef] text-[#006241] border border-[#c1ebd5] px-2 py-0.5 rounded-full font-bold">
-                    Stage {case_.stageIdentified}
-                  </span>
-                </div>
-                <div className="mt-1">
-                  <StatusBadge status={case_.discrepancyType} size="sm" />
-                </div>
-              </div>
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                onClick={onClose}
-                className="text-slate-400 hover:text-slate-700 h-8 w-8 rounded-full border border-slate-200 flex items-center justify-center hover:bg-white transition-colors cursor-pointer text-sm"
-              >
-                ✕
-              </motion.button>
-            </div>
+          <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-6">
+            <section className="border border-line bg-paper p-4" aria-label="Record details">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-muted">Record</p>
+              <Row label="Order reference" value={case_.orderId} mono />
+              {case_.gatewayRef && <Row label="Gateway reference" value={case_.gatewayRef} mono />}
+              <Row label="Detection stage" value={`Stage ${case_.stageIdentified}`} />
+              <Row label="Discrepancy type" value={case_.discrepancyType.replace(/_/g, ' ').toLowerCase()} />
+            </section>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-              {/* Order info */}
-              <div className="bg-[#f4f5f7] rounded-2xl p-4 space-y-2.5 border border-slate-200/70">
-                <Row label="Order ID" value={case_.orderId} mono />
-                {case_.gatewayRef && <Row label="Gateway Ref" value={case_.gatewayRef} mono />}
-                <Row label="Detection Stage" value={`Stage ${case_.stageIdentified} Deterministic Engine`} />
-              </div>
+            <section className="border-l-2 border-rust bg-[#faf2ee] p-4" aria-label="Amount details">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-rust">Amount details</p>
+              <Row label="Amount at risk" value={money(case_.amountAtRisk)} mono emphasis />
+              <Row label="Expected amount" value={money(case_.expectedAmount)} mono />
+              <Row label="Actual amount" value={money(case_.actualAmount)} mono />
+              <p className="mt-3 border-t border-[#e8d4cb] pt-3 text-sm leading-6 text-muted">{case_.details}</p>
+            </section>
 
-              {/* Financial discrepancy */}
-              <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-4 space-y-2.5">
-                <div className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">Financial Risk Exposure</div>
-                <Row label="Amount at Risk" value={paise(case_.amountAtRisk)} mono valueClass="font-bold text-rose-700 text-sm" />
-                <Row label="Expected Amount" value={paise(case_.expectedAmount)} mono />
-                <Row label="Actual Captured" value={paise(case_.actualAmount)} mono />
-                <div className="pt-2 border-t border-rose-200/60 text-xs text-rose-700 leading-relaxed">{case_.details}</div>
-              </div>
+            <section className="border border-line p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-muted">Current API status</p>
+              <div className="mt-2"><StatusBadge status={case_.status} size="md" /></div>
+              {case_.status !== 'PENDING_REVIEW' && <p className="mt-3 text-sm leading-6 text-muted">The API returned this decision state. Audit persistence is determined by the configured backend.</p>}
+            </section>
 
-              {/* Current status */}
-              <div className="flex items-center justify-between p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
-                <span className="text-xs text-slate-500 font-semibold">Governance Status</span>
-                <StatusBadge status={case_.status} size="md" />
-              </div>
-
-              {/* Decision form */}
-              {case_.status === 'PENDING_REVIEW' && (
-                <div className="pt-2">
-                  <div className="text-xs font-bold text-slate-800 mb-3">Record Operational Decision</div>
-                  <DecisionForm onSubmit={handleDecision} submitting={submitting} />
-                </div>
-              )}
-              {case_.status !== 'PENDING_REVIEW' && (
-                <div className="p-4 bg-[#e6f7ef] border border-[#c1ebd5] rounded-2xl text-xs text-[#006241] text-center font-medium">
-                  ✓ Decision logged permanently in tamper-proof audit trail: <strong>{case_.status}</strong>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        </>
-      )}
+            {case_.status === 'PENDING_REVIEW' && <section>
+              <h3 className="mb-3 text-sm font-semibold">Record a review decision</h3>
+              {error && <p role="alert" className="mb-3 border-l-2 border-rust bg-[#faf2ee] px-3 py-2 text-sm leading-5 text-rust">{error}</p>}
+              <DecisionForm onSubmit={handleDecision} submitting={submitting} />
+            </section>}
+          </div>
+        </motion.section>
+      </>}
     </AnimatePresence>
   );
 };
 
-const Row: React.FC<{ label: string; value: string; mono?: boolean; valueClass?: string }> = ({
-  label, value, mono, valueClass,
-}) => (
-  <div className="flex justify-between items-center text-xs">
-    <span className="text-slate-500 font-medium">{label}</span>
-    <span className={`text-slate-900 ${mono ? 'font-mono tabular-nums font-semibold' : ''} ${valueClass ?? ''}`}>
-      {value}
-    </span>
-  </div>
-);
+function Row({ label, value, mono = false, emphasis = false }: { label: string; value: string; mono?: boolean; emphasis?: boolean }) {
+  return <div className="grid grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] gap-3 py-1.5 text-sm"><span className="text-muted">{label}</span><span className={`break-words text-right text-ink ${mono ? 'font-mono tabular-nums' : ''} ${emphasis ? 'font-semibold text-rust' : ''}`}>{value}</span></div>;
+}

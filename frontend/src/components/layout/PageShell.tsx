@@ -1,7 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
-import { SlimIconSidebar } from './SlimIconSidebar';
-import { containerStaggerVariants, itemFadeInVariants } from '../../utils/motion';
 
 interface PageShellProps {
   title: string;
@@ -11,30 +8,14 @@ interface PageShellProps {
 }
 
 export const PageShell: React.FC<PageShellProps> = ({ title, subtitle, actions, children }) => (
-  <div className="space-y-6">
-    {/* Page Header matching Pinterest Quixotic styling */}
-    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">{title}</h1>
-        {subtitle && <p className="text-xs text-slate-500 mt-1 font-medium">{subtitle}</p>}
+  <section className="min-w-0 space-y-7">
+    <header className="flex flex-col justify-between gap-4 border-b border-line pb-6 sm:flex-row sm:items-end">
+      <div className="max-w-3xl">
+        <h1 className="font-display text-3xl leading-tight tracking-[-0.035em] text-ink sm:text-4xl">{title}</h1>
+        {subtitle && <p className="mt-2 max-w-2xl text-sm leading-6 text-muted sm:text-base">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-3">{actions}</div>}
-    </div>
-
-    {/* Main Content Area with Slim Sidebar & Content Grid */}
-    <div className="flex gap-6 items-start">
-      {/* Slim Sidebar present across all views */}
-      <SlimIconSidebar />
-
-      {/* Main View Grid with Staggered Fade-in */}
-      <motion.div
-        variants={containerStaggerVariants}
-        initial="hidden"
-        animate="visible"
-        className="flex-1 min-w-0"
-      >
-        {children}
-      </motion.div>
-    </div>
-  </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+    </header>
+    <div className="min-w-0">{children}</div>
+  </section>
 );

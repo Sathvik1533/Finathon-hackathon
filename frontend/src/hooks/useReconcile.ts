@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { triggerRun, getHealth, getLatestRun } from '../api/reconcile';
+import { useCallback, useState } from 'react';
+import { triggerRun as apiTriggerRun, getLatestRun } from '../api/reconcile';
 import type { ReconRunResult } from '../api/reconcile';
 import { useAuth } from '../context/AuthContext';
 
@@ -14,10 +14,9 @@ export function useReconcile() {
     setLoading(true);
     setError(null);
     try {
-      const result = await triggerRun(user.token);
-      setRun(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Reconciliation failed');
+      setRun(await apiTriggerRun(user.token));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Reconciliation failed.');
     } finally {
       setLoading(false);
     }
@@ -25,20 +24,15 @@ export function useReconcile() {
 
   const loadLatest = useCallback(async () => {
     if (!user?.token) return;
+    setLoading(true);
+    setError(null);
     try {
-      const latest = await getLatestRun(user.token);
-      if (latest && latest.runId) {
-        setRun(latest);
-        return;
-      }
-    } catch {
-      // Fallback to health endpoint
-    }
-    try {
-      const health = await getHealth(user.token);
-      if (health.latestRun) setRun(health.latestRun);
-    } catch {
-      // No previous run
+      setRun(await getLatestRun(user.token));
+    } catch (caught) {
+      setRun(null);
+      setError(caught instanceof Error ? caught.message : 'Could not load the latest run.');
+    } finally {
+      setLoading(false);
     }
   }, [user?.token]);
 

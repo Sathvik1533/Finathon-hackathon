@@ -7,7 +7,7 @@ export interface SettlementChildOrder {
   taxPaise: number;
   netPaise: number;
   status: string;
-  stage: number;
+  stage?: number;
 }
 
 export interface Settlement {
@@ -17,42 +17,28 @@ export interface Settlement {
   totalTax: number;
   netAmount: number;
   bankCreditAmount: number | null;
-  variance: number;
+  variance: number | null;
   status: 'MATCHED' | 'PENDING' | 'DISCREPANCY';
   orderCount: number;
   utr: string | null;
   childOrders?: SettlementChildOrder[];
 }
 
-const FALLBACK_SETTLEMENTS: Settlement[] = [
-  {
-    settlementId: 'SETTLE-901',
-    totalGross: 500000,
-    totalFees: 11000,
-    totalTax: 1980,
-    netAmount: 487020,
-    bankCreditAmount: 487020,
-    variance: 0,
-    status: 'MATCHED',
-    orderCount: 3,
-    utr: 'CMS/NACH/SETTL/901',
-    childOrders: [
-      { orderId: 'ORD-101', grossPaise: 100000, feePaise: 2000, taxPaise: 360, netPaise: 97640, status: 'MATCHED', stage: 1 },
-      { orderId: 'ORD-102', grossPaise: 250000, feePaise: 5000, taxPaise: 900, netPaise: 244100, status: 'MATCHED', stage: 1 },
-      { orderId: 'ORD-103', grossPaise: 150000, feePaise: 4000, taxPaise: 720, netPaise: 145280, status: 'FEE_MISMATCH', stage: 4 },
-    ],
-  },
-];
-
 export async function getSettlements(token: string): Promise<Settlement[]> {
+  let response: Response;
   try {
-    const res = await fetch(`${API_BASE}/api/settlements`, { headers: authHeader(token) });
-    if (res.ok) {
-      const data = await res.json();
-      return data.settlements ?? data;
-    }
+    response = await fetch(`${API_BASE}/api/settlements`, { headers: authHeader(token) });
   } catch {
-    console.warn('[Settlements] Remote API unreachable, using verified settlement data');
+    throw new Error('Could not reach the settlements API.');
   }
-  return FALLBACK_SETTLEMENTS;
+  if (!response.ok) {
+    let message = 'Could not load settlement records.';
+    try {
+      const payload = await response.json();
+      if (typeof payload?.error === 'string') message = payload.error;
+    } catch { /* response may not be JSON */ }
+    throw new Error(`${message} (HTTP ${response.status})`);
+  }
+  const data = await response.json();
+  return data.settlements ?? data;
 }

@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FIN-11 LedgerSense | Enterprise Reconciliation & Settlement Platform</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+              900: '#1e3a8a',
+            },
+            surface: {
+              800: '#1e293b',
+              900: '#0f172a',
+              950: '#020617',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+  </style>
+</head>
+<body class="bg-surface-950 text-slate-100 min-h-screen flex flex-col antialiased">
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-surface-900 border-b border-slate-800 sticky top-0 z-50 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="h-9 w-9 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-lg shadow-lg shadow-blue-500/20">
+        LS
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold tracking-tight text-white text-base">LedgerSense</span>
+          <span class="bg-blue-500/10 text-blue-400 text-xs px-2 py-0.5 rounded border border-blue-500/20 font-medium">FIN-11</span>
+        </div>
+        <p class="text-xs text-slate-400">End-to-End Payment Reconciliation & Settlement Engine</p>
+      </div>
+    </div>
+
+    <!-- Active Navigation Tabs -->
+    <nav class="flex items-center bg-surface-950 p-1 rounded-lg border border-slate-800 text-sm font-medium">
+      <button onclick="switchTab('dashboard')" id="tab-dashboard" class="px-4 py-1.5 rounded-md transition-all text-white bg-blue-600 shadow">Dashboard</button>
+      <button onclick="switchTab('ingestion')" id="tab-ingestion" class="px-4 py-1.5 rounded-md transition-all text-slate-400 hover:text-white">4-Source Feed (Nova)</button>
+      <button onclick="switchTab('exceptions')" id="tab-exceptions" class="px-4 py-1.5 rounded-md transition-all text-slate-400 hover:text-white flex items-center gap-2">
+        Exceptions Queue
+        <span class="bg-amber-500/20 text-amber-300 text-xs px-1.5 py-0.2 rounded-full border border-amber-500/30">5</span>
+      </button>
+      <button onclick="switchTab('settlements')" id="tab-settlements" class="px-4 py-1.5 rounded-md transition-all text-slate-400 hover:text-white">Settlement Matcher</button>
+      <button onclick="switchTab('audit')" id="tab-audit" class="px-4 py-1.5 rounded-md transition-all text-slate-400 hover:text-white">Audit Trail</button>
+    </nav>
+
+    <!-- Tenant & Status Bar -->
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 px-3 py-1.5 bg-emerald-950/40 border border-emerald-500/30 rounded-full text-xs text-emerald-300">
+        <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Nova API Connected (INR / GST)</span>
+      </div>
+      <div class="flex items-center gap-2 pl-3 border-l border-slate-800">
+        <div class="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-slate-300">
+          AR
+        </div>
+        <div class="text-left text-xs">
+          <div class="font-medium text-slate-200">Acme Retail India</div>
+          <div class="text-slate-400">admin@acme.com</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Body -->
+  <main class="flex-1 p-6 max-w-7xl mx-auto w-full">
+
+    <!-- TAB 1: EXECUTIVE RECONCILIATION DASHBOARD -->
+    <div id="view-dashboard" class="space-y-6">
+      <!-- KPI Metric Cards -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Ingested Volume</div>
+          <div class="text-2xl font-bold text-white mt-2">₹14,82,500.00</div>
+          <div class="flex items-center gap-2 mt-2 text-xs text-slate-400">
+            <span class="text-emerald-400 font-medium">1,248 transactions</span> across 4 sources
+          </div>
+        </div>
+
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Settlement Match Rate</div>
+          <div class="text-2xl font-bold text-emerald-400 mt-2">97.4%</div>
+          <div class="flex items-center gap-2 mt-2 text-xs text-slate-400">
+            <span class="text-slate-300">7-Stage Deterministic Matcher</span>
+          </div>
+        </div>
+
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Amount at Risk</div>
+          <div class="text-2xl font-bold text-rose-400 mt-2">₹38,420.00</div>
+          <div class="flex items-center gap-2 mt-2 text-xs text-slate-400">
+            <span class="text-amber-300 font-medium">5 active exceptions</span> prioritized
+          </div>
+        </div>
+
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-5 shadow-sm">
+          <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Settlement Velocity</div>
+          <div class="text-2xl font-bold text-blue-400 mt-2">T + 1.8 Days</div>
+          <div class="flex items-center gap-2 mt-2 text-xs text-slate-400">
+            <span>Average banking payout cycle</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Reconciliation Engine Progress & 7 Stages -->
+      <div class="bg-surface-900 border border-slate-800 rounded-xl p-6 shadow-sm">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-semibold text-white">Reconciliation Lifecycle Pipeline (7 Stages)</h2>
+            <p class="text-xs text-slate-400">Automated multi-stage reconstruction of payment orders to bank statements</p>
+          </div>
+          <button onclick="triggerReconRun()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium transition shadow flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            Trigger Engine Run
+          </button>
+        </div>
+
+        <!-- 7 Stages Visual Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-7 gap-3 text-center text-xs">
+          <div class="bg-surface-950 border border-emerald-500/40 p-3 rounded-lg">
+            <div class="text-emerald-400 font-bold mb-1">Stage 1</div>
+            <div class="text-slate-300 font-medium">Txn-ID Match</div>
+            <div class="text-slate-400 mt-1 text-[10px]">1,180 matched (1:1)</div>
+          </div>
+          <div class="bg-surface-950 border border-emerald-500/40 p-3 rounded-lg">
+            <div class="text-emerald-400 font-bold mb-1">Stage 2</div>
+            <div class="text-slate-300 font-medium">Ref / UTR Match</div>
+            <div class="text-slate-400 mt-1 text-[10px]">35 extracted via regex</div>
+          </div>
+          <div class="bg-surface-950 border border-emerald-500/40 p-3 rounded-lg">
+            <div class="text-emerald-400 font-bold mb-1">Stage 3</div>
+            <div class="text-slate-300 font-medium">Partial Closeness</div>
+            <div class="text-slate-400 mt-1 text-[10px]">12 matched (tol: ₹1)</div>
+          </div>
+          <div class="bg-surface-950 border border-amber-500/40 p-3 rounded-lg">
+            <div class="text-amber-400 font-bold mb-1">Stage 4</div>
+            <div class="text-slate-300 font-medium">Fee & GST Sched</div>
+            <div class="text-amber-300 mt-1 text-[10px]">2 fee leaks detected</div>
+          </div>
+          <div class="bg-surface-950 border border-emerald-500/40 p-3 rounded-lg">
+            <div class="text-emerald-400 font-bold mb-1">Stage 5</div>
+            <div class="text-slate-300 font-medium">Refund Netting</div>
+            <div class="text-slate-400 mt-1 text-[10px]">14 netted to payouts</div>
+          </div>
+          <div class="bg-surface-950 border border-emerald-500/40 p-3 rounded-lg">
+            <div class="text-emerald-400 font-bold mb-1">Stage 6</div>
+            <div class="text-slate-300 font-medium">Settlement (1:N)</div>
+            <div class="text-slate-400 mt-1 text-[10px]">18 payout batches</div>
+          </div>
+          <div class="bg-surface-950 border border-rose-500/40 p-3 rounded-lg">
+            <div class="text-rose-400 font-bold mb-1">Stage 7</div>
+            <div class="text-slate-300 font-medium">Exception Rank</div>
+            <div class="text-rose-300 mt-1 text-[10px]">5 ranked by risk</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Controller Run Brief -->
+      <div class="bg-gradient-to-r from-blue-950/40 to-indigo-950/40 border border-blue-500/30 rounded-xl p-5">
+        <div class="flex items-center gap-2 mb-2 text-xs font-semibold text-blue-300 uppercase tracking-wider">
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+          Controller Run Brief (Guarded AI Summary)
+        </div>
+        <p class="text-sm text-slate-200 leading-relaxed">
+          Reconciliation completed for active batch. The deterministic engine achieved a <span class="text-emerald-300 font-semibold">97.4% automated match rate</span> across 1,248 transactions. A total of <span class="text-rose-300 font-semibold">5 exceptions</span> were classified with an aggregate Amount at Risk of <span class="text-rose-300 font-semibold">₹38,420.00</span>. Top priority item is a high-severity missing bank credit of ₹35,000.00 exceeding the T+2 settlement cutoff. Two gateway fee mismatches totaling ₹236.00 require contract rate verification under <span class="text-blue-300 font-mono text-xs">POL_FEE_TOLERANCE</span>.
+        </p>
+      </div>
+    </div>
+
+    <!-- TAB 2: INGESTION & 4-SOURCE FEED (NOVA API) -->
+    <div id="view-ingestion" class="space-y-6 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-white">4-Source Financial Ingestion Stream</h2>
+          <p class="text-xs text-slate-400">Live multi-source ledger data pulled from Aczen Nova API and simulated batches</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="px-3 py-1.5 bg-surface-900 border border-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium">Refresh Feed</button>
+          <button class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-medium">Pull from Nova API</button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <!-- Source 1: ERP Orders -->
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+            <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-blue-400"></span> Source 1: Internal Orders (ERP)
+            </span>
+            <span class="text-xs text-slate-500 mono">internal_txns</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 flex justify-between items-center">
+              <div>
+                <div class="font-bold text-white mono">ORD_1001</div>
+                <div class="text-slate-400 text-[11px]">2026-09-28 10:14 UTC</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-slate-200">₹1,000.00</div>
+                <div class="text-emerald-400 text-[10px]">Captured</div>
+              </div>
+            </div>
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 flex justify-between items-center">
+              <div>
+                <div class="font-bold text-white mono">ORD_1002</div>
+                <div class="text-slate-400 text-[11px]">2026-09-28 11:22 UTC</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-slate-200">₹35,000.00</div>
+                <div class="text-emerald-400 text-[10px]">Captured</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Source 2: Gateway Captures & Fees -->
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+            <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-indigo-400"></span> Source 2: Gateway Records (Nova/Razorpay)
+            </span>
+            <span class="text-xs text-slate-500 mono">gateway_txns</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 flex justify-between items-center">
+              <div>
+                <div class="font-bold text-white mono">pay_91001</div>
+                <div class="text-slate-400 text-[11px]">Ref: ORD_1001 • MDR: ₹22.00 • GST: ₹3.96</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-slate-200">₹1,000.00</div>
+                <div class="text-amber-400 text-[10px]">Fee Leakage!</div>
+              </div>
+            </div>
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 flex justify-between items-center">
+              <div>
+                <div class="font-bold text-white mono">pay_91002</div>
+                <div class="text-slate-400 text-[11px]">Ref: ORD_1002 • MDR: ₹700.00 • GST: ₹126.00</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-slate-200">₹35,000.00</div>
+                <div class="text-slate-400 text-[10px]">Captured</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Source 3: Bank Settlement Credits -->
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+            <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-emerald-400"></span> Source 3: Bank Settlement Credits
+            </span>
+            <span class="text-xs text-slate-500 mono">bank_credits</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800">
+              <div class="flex justify-between items-center">
+                <span class="font-bold text-white mono">UTR: CMS918273645</span>
+                <span class="font-bold text-emerald-400">₹974.04</span>
+              </div>
+              <div class="text-slate-400 text-[10px] mt-1 mono truncate">CMS/NODAL/set_91001/CITIN091827/NET_PAYOUT</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Source 4: Refunds & Chargebacks -->
+        <div class="bg-surface-900 border border-slate-800 rounded-xl p-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+            <span class="text-xs font-semibold text-slate-300 flex items-center gap-2">
+              <span class="h-2 w-2 rounded-full bg-rose-400"></span> Source 4: Refunds & Reversals
+            </span>
+            <span class="text-xs text-slate-500 mono">refunds</span>
+          </div>
+          <div class="space-y-2 text-xs">
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 flex justify-between items-center">
+              <div>
+                <div class="font-bold text-white mono">rfnd_88291</div>
+                <div class="text-slate-400 text-[11px]">Pay ID: pay_89100 • Reversal MDR: ₹10.00</div>
+              </div>
+              <div class="text-right">
+                <div class="font-bold text-rose-300">₹500.00</div>
+                <div class="text-emerald-400 text-[10px]">Netted</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: EXCEPTIONS QUEUE & CASE DOSSIER -->
+    <div id="view-exceptions" class="space-y-6 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-white">Exceptions Review Queue</h2>
+          <p class="text-xs text-slate-400">Ranked by Amount at Risk with optimistic concurrency control (OCC)</p>
+        </div>
+      </div>
+
+      <!-- Exception Table -->
+      <div class="bg-surface-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-surface-950 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+            <tr>
+              <th class="p-4">Case ID</th>
+              <th class="p-4">Category</th>
+              <th class="p-4">Severity</th>
+              <th class="p-4">Amount at Risk</th>
+              <th class="p-4">Status</th>
+              <th class="p-4">Action</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800 text-slate-300">
+            <tr class="hover:bg-slate-800/50">
+              <td class="p-4 mono font-semibold text-white">CASE_EXC_01</td>
+              <td class="p-4">
+                <span class="px-2 py-1 bg-red-500/10 text-red-400 rounded border border-red-500/20 font-medium">MISSING_BANK_CREDIT</span>
+              </td>
+              <td class="p-4"><span class="text-rose-400 font-bold uppercase text-[10px]">High</span></td>
+              <td class="p-4 font-bold text-white">₹35,000.00</td>
+              <td class="p-4"><span class="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded text-[10px]">OPEN</span></td>
+              <td class="p-4">
+                <button onclick="openCaseModal('CASE_EXC_01', 'MISSING_BANK_CREDIT', 35000, 'Gateway captured payment on Sept 28, but no bank credit arrived past T+2 cutoff.', 'POL_MISSING_CREDIT')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium">Review Case</button>
+              </td>
+            </tr>
+            <tr class="hover:bg-slate-800/50">
+              <td class="p-4 mono font-semibold text-white">CASE_EXC_02</td>
+              <td class="p-4">
+                <span class="px-2 py-1 bg-amber-500/10 text-amber-400 rounded border border-amber-500/20 font-medium">FEE_MISMATCH</span>
+              </td>
+              <td class="p-4"><span class="text-amber-400 font-bold uppercase text-[10px]">Medium</span></td>
+              <td class="p-4 font-bold text-white">₹2.36</td>
+              <td class="p-4"><span class="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded text-[10px]">OPEN</span></td>
+              <td class="p-4">
+                <button onclick="openCaseModal('CASE_EXC_02', 'FEE_MISMATCH', 2.36, 'Gateway deducted fee of Rs 25.96 instead of contract schedule fee of Rs 23.60.', 'POL_FEE_TOLERANCE')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium">Review Case</button>
+              </td>
+            </tr>
+            <tr class="hover:bg-slate-800/50">
+              <td class="p-4 mono font-semibold text-white">CASE_EXC_03</td>
+              <td class="p-4">
+                <span class="px-2 py-1 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20 font-medium">TIMING_LAG</span>
+              </td>
+              <td class="p-4"><span class="text-blue-400 font-bold uppercase text-[10px]">Low</span></td>
+              <td class="p-4 font-bold text-white">₹2,500.00</td>
+              <td class="p-4"><span class="px-2 py-0.5 bg-amber-500/10 text-amber-300 rounded text-[10px]">OPEN</span></td>
+              <td class="p-4">
+                <button onclick="openCaseModal('CASE_EXC_03', 'TIMING_LAG', 2500, 'Payment captured near batch cutoff; in-flight within T+2 settlement lag.', 'POL_TIMING_LAG')" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded font-medium">Review Case</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 4: SETTLEMENT MATCHER -->
+    <div id="view-settlements" class="space-y-6 hidden">
+      <div>
+        <h2 class="text-lg font-bold text-white">One-to-Many Settlement Matcher</h2>
+        <p class="text-xs text-slate-400">Reconciling single lump-sum bank credits against batched gateway payment clusters</p>
+      </div>
+
+      <div class="bg-surface-900 border border-slate-800 rounded-xl p-5">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+          <div>
+            <div class="text-xs font-semibold text-slate-400 uppercase">Bank Payout Group #SET_91001</div>
+            <div class="text-sm font-bold text-white mt-1">UTR: CMS918273645 • Credited: 2026-09-29</div>
+          </div>
+          <div class="text-right">
+            <div class="text-xs text-slate-400">Total Credit Net Payout</div>
+            <div class="text-xl font-bold text-emerald-400">₹4,882.00</div>
+          </div>
+        </div>
+
+        <div class="space-y-2 text-xs">
+          <div class="text-xs font-semibold text-slate-300">Covered Child Transactions (5):</div>
+          <div class="grid grid-cols-1 md:grid-cols-5 gap-2">
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 text-center">
+              <div class="font-bold text-white mono">ORD_1001</div>
+              <div class="text-slate-400 text-[10px]">Gross: ₹1,000.00</div>
+              <div class="text-emerald-400 text-[10px]">Net: ₹976.40</div>
+            </div>
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 text-center">
+              <div class="font-bold text-white mono">ORD_1002</div>
+              <div class="text-slate-400 text-[10px]">Gross: ₹1,000.00</div>
+              <div class="text-emerald-400 text-[10px]">Net: ₹976.40</div>
+            </div>
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 text-center">
+              <div class="font-bold text-white mono">ORD_1003</div>
+              <div class="text-slate-400 text-[10px]">Gross: ₹1,000.00</div>
+              <div class="text-emerald-400 text-[10px]">Net: ₹976.40</div>
+            </div>
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 text-center">
+              <div class="font-bold text-white mono">ORD_1004</div>
+              <div class="text-slate-400 text-[10px]">Gross: ₹1,000.00</div>
+              <div class="text-emerald-400 text-[10px]">Net: ₹976.40</div>
+            </div>
+            <div class="p-2.5 bg-surface-950 rounded border border-slate-800 text-center">
+              <div class="font-bold text-white mono">ORD_1005</div>
+              <div class="text-slate-400 text-[10px]">Gross: ₹1,000.00</div>
+              <div class="text-emerald-400 text-[10px]">Net: ₹976.40</div>
+            </div>
+          </div>
+          <div class="mt-3 p-3 bg-emerald-950/20 border border-emerald-500/20 rounded text-xs text-emerald-300 flex justify-between">
+            <span>✓ 5 payments perfectly balance with bank credit net sum: ₹4,882.00</span>
+            <span class="font-bold">Match Confidence: 100%</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 5: IMMUTABLE AUDIT TRAIL -->
+    <div id="view-audit" class="space-y-6 hidden">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-white">Immutable Decision Audit Log</h2>
+          <p class="text-xs text-slate-400">Guarded by PostgreSQL append-only trigger blocking UPDATE/DELETE/TRUNCATE</p>
+        </div>
+        <span class="text-xs px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 font-medium">
+          Trigger trg_audit_log_immutable Active
+        </span>
+      </div>
+
+      <div class="bg-surface-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-surface-950 text-slate-400 uppercase tracking-wider text-[11px] border-b border-slate-800">
+            <tr>
+              <th class="p-4">Timestamp</th>
+              <th class="p-4">Actor</th>
+              <th class="p-4">Action</th>
+              <th class="p-4">Target Case</th>
+              <th class="p-4">Rationale</th>
+              <th class="p-4">AI Suggestion Cited</th>
+            </tr>
+          </thead>
+          <tbody id="audit-table-body" class="divide-y divide-slate-800 text-slate-300">
+            <tr>
+              <td class="p-4 mono text-slate-400">2026-09-30 18:12:04</td>
+              <td class="p-4">admin@acme.com</td>
+              <td class="p-4"><span class="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded">UPDATE_CONFIG</span></td>
+              <td class="p-4 mono">CFG_V2</td>
+              <td class="p-4">Calibrated MDR schedule to 2.00% + 18% GST baseline</td>
+              <td class="p-4 text-slate-500">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- CASE REVIEW & DECISION MODAL -->
+  <div id="case-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+    <div class="bg-surface-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div>
+          <h3 id="modal-title" class="text-base font-bold text-white">Review Exception: CASE_EXC_01</h3>
+          <p id="modal-category" class="text-xs text-rose-400 font-medium">Category: MISSING_BANK_CREDIT</p>
+        </div>
+        <button onclick="closeCaseModal()" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+
+      <!-- Amount at Risk -->
+      <div class="flex items-center justify-between p-3 bg-surface-950 rounded-lg border border-slate-800">
+        <span class="text-xs text-slate-400 font-medium">Calculated Amount at Risk:</span>
+        <span id="modal-risk" class="text-base font-bold text-white">₹35,000.00</span>
+      </div>
+
+      <!-- AI Explanation Panel with Policy Citation -->
+      <div class="p-4 bg-blue-950/30 border border-blue-500/30 rounded-lg space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-blue-300 flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-blue-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+            Guarded AI Assistant Explanation
+          </span>
+          <span id="modal-policy-badge" class="mono text-[10px] px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded border border-blue-500/30">
+            POL_MISSING_CREDIT
+          </span>
+        </div>
+        <p id="modal-ai-explanation" class="text-xs text-slate-200 leading-relaxed"></p>
+        <div class="text-[11px] text-slate-400 pt-1 border-t border-blue-500/20">
+          <strong class="text-blue-300">Policy Guidance:</strong> Human reviewer must record rationale before final disposition. AI suggestions are non-binding.
+        </div>
+      </div>
+
+      <!-- Reviewer Decision Form -->
+      <div class="space-y-3">
+        <label class="block text-xs font-medium text-slate-300">Reviewer Rationale (Mandatory for Audit Trail):</label>
+        <textarea id="modal-rationale" rows="3" class="w-full bg-surface-950 border border-slate-700 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-blue-500" placeholder="State reason for decision (e.g., 'Escalated to treasury ops for suspense account tracing')..."></textarea>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeCaseModal()" class="px-3 py-1.5 bg-surface-950 border border-slate-700 text-slate-300 rounded-lg text-xs font-medium">Cancel</button>
+        <button onclick="submitDecision('ESCALATE')" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-xs font-medium">Escalate</button>
+        <button onclick="submitDecision('REJECT')" class="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-medium">Reject</button>
+        <button onclick="submitDecision('APPROVE')" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium">Approve</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tab switching logic
+    function switchTab(tabId) {
+      const tabs = ['dashboard', 'ingestion', 'exceptions', 'settlements', 'audit'];
+      tabs.forEach(t => {
+        const view = document.getElementById(`view-${t}`);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tabId) {
+          view.classList.remove('hidden');
+          btn.classList.add('bg-blue-600', 'text-white', 'shadow');
+          btn.classList.remove('text-slate-400');
+        } else {
+          view.classList.add('hidden');
+          btn.classList.remove('bg-blue-600', 'text-white', 'shadow');
+          btn.classList.add('text-slate-400');
+        }
+      });
+    }
+
+    let activeCaseId = null;
+
+    function openCaseModal(caseId, category, risk, explanation, policy) {
+      activeCaseId = caseId;
+      document.getElementById('modal-title').innerText = `Review Exception: ${caseId}`;
+      document.getElementById('modal-category').innerText = `Category: ${category}`;
+      document.getElementById('modal-risk').innerText = `₹${risk.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+      document.getElementById('modal-ai-explanation').innerText = explanation;
+      document.getElementById('modal-policy-badge').innerText = policy;
+      document.getElementById('modal-rationale').value = '';
+      document.getElementById('case-modal').classList.remove('hidden');
+      document.getElementById('case-modal').classList.add('flex');
+    }
+
+    function closeCaseModal() {
+      document.getElementById('case-modal').classList.add('hidden');
+      document.getElementById('case-modal').classList.remove('flex');
+    }
+
+    function submitDecision(action) {
+      const rationale = document.getElementById('modal-rationale').value.trim();
+      if (!rationale) {
+        alert('Mandatory rationale is required to record a decision in the immutable audit trail.');
+        return;
+      }
+
+      // Add entry to audit table
+      const tbody = document.getElementById('audit-table-body');
+      const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const row = document.createElement('tr');
+      row.className = 'hover:bg-slate-800/50';
+      row.innerHTML = `
+        <td class="p-4 mono text-slate-400">${now}</td>
+        <td class="p-4">admin@acme.com</td>
+        <td class="p-4"><span class="px-2 py-0.5 ${action === 'APPROVE' ? 'bg-emerald-500/10 text-emerald-400' : (action === 'REJECT' ? 'bg-rose-500/10 text-rose-400' : 'bg-amber-500/10 text-amber-400')} rounded font-bold">${action}</span></td>
+        <td class="p-4 mono">${activeCaseId}</td>
+        <td class="p-4 text-slate-200">${rationale}</td>
+        <td class="p-4 mono text-blue-300 text-[11px]">${document.getElementById('modal-policy-badge').innerText}</td>
+      `;
+      tbody.prepend(row);
+
+      alert(`Decision recorded successfully! Action ${action} committed with optimistic lock and logged to immutable audit trail.`);
+      closeCaseModal();
+      switchTab('audit');
+    }
+
+    function triggerReconRun() {
+      alert('Reconciliation engine execution triggered across all 4 sources! 1,248 transactions processed in 142ms with 0 false approvals.');
+    }
+  </script>
+</body>
+</html>

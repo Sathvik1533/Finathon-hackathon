@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { PageShell } from '../components/layout/PageShell';
 import { syncNova } from '../api/nova';
@@ -12,9 +13,25 @@ const paise = (v: number) => `₹${(v / 100).toFixed(2)}`;
 
 export const TimelinePage: React.FC = () => {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const initialOrder = (searchParams.get('order') as OrderId) || 'ORD-101';
+
   const [data, setData] = useState<NovaSyncResponse | null>(null);
-  const [selected, setSelected] = useState<OrderId>('ORD-101');
+  const [selected, setSelected] = useState<OrderId>(
+    ORDERS.includes(initialOrder) ? initialOrder : 'ORD-101'
+  );
   const [loading, setLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+  const [filterMode, setFilterMode] = useState<'ALL' | 'CLEAN' | 'DISCREPANCY'>('ALL');
+  const [searchTxn, setSearchTxn] = useState('');
+
+  // Update selection if query param changes
+  useEffect(() => {
+    const qOrder = searchParams.get('order') as OrderId;
+    if (qOrder && ORDERS.includes(qOrder)) {
+      setSelected(qOrder);
+    }
+  }, [searchParams]);
 
   const sync = async () => {
     if (!user?.token) return;
@@ -31,6 +48,21 @@ export const TimelinePage: React.FC = () => {
   useEffect(() => {
     sync();
   }, [user?.token]);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const filteredOrders = ORDERS.filter(ord => {
+    if (filterMode === 'CLEAN' && (ord === 'ORD-103' || ord === 'ORD-104')) return false;
+    if (filterMode === 'DISCREPANCY' && (ord === 'ORD-101' || ord === 'ORD-102')) return false;
+    if (searchTxn.trim()) {
+      return ord.toLowerCase().includes(searchTxn.toLowerCase());
+    }
+    return true;
+  });
 
   const payment = data?.payments.find((p: NovaPayment) => p.order_ref === selected);
   const gateway = data?.gatewayTransactions.find((g: NovaGatewayTxn) => g.order_ref === selected);
@@ -57,24 +89,97 @@ export const TimelinePage: React.FC = () => {
         </motion.button>
       }
     >
-      {/* Order selector matching Pinterest pill buttons */}
-      <div className="flex flex-wrap items-center gap-2 mb-6 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
-        <span className="text-xs font-bold text-slate-700 mr-2">Select Target Order:</span>
-        <div className="flex flex-wrap gap-2">
-          {ORDERS.map(ord => (
-            <motion.button
-              key={ord}
-              {...buttonPressProps}
-              onClick={() => setSelected(ord)}
-              className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                selected === ord
-                  ? 'bg-[#006241] border-[#006241] text-white shadow-xs'
-                  : 'bg-white border-slate-200 text-slate-700 hover:border-[#006241] hover:text-[#006241]'
+      {/* Transaction ID Search & Filter Controls */}
+      <div className="bg-white p-4 rounded-3xl border border-slate-200/80 shadow-xs space-y-3 mb-6">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          
+          {/* Search Box */}
+          <div className="relative flex-1">
+            <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </span>
+            <input
+              type="text"
+              value={searchTxn}
+              onChange={e => setSearchTxn(e.target.value)}
+              placeholder="Search Transaction ID (ORD-101, gw_tx_, UTR...)"
+              className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-full focus:outline-none focus:border-[#006241] text-slate-800"
+            />
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 bg-[#f4f5f7] p-1 rounded-full text-xs font-semibold">
+            <button
+              onClick={() => setFilterMode('ALL')}
+              className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                filterMode === 'ALL' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-800'
               }`}
             >
-              {ord}
-            </motion.button>
-          ))}
+              All (4)
+            </button>
+            <button
+              onClick={() => setFilterMode('CLEAN')}
+              className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                filterMode === 'CLEAN' ? 'bg-white text-emerald-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Clean (2)
+            </button>
+            <button
+              onClick={() => setFilterMode('DISCREPANCY')}
+              className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
+                filterMode === 'DISCREPANCY' ? 'bg-white text-amber-700 shadow-xs' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Exceptions (2)
+            </button>
+          </div>
+
+        </div>
+
+        {/* Target Order Pills & Copy Action */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-700">Target Order:</span>
+            {filteredOrders.map(ord => (
+              <motion.button
+                key={ord}
+                {...buttonPressProps}
+                onClick={() => setSelected(ord)}
+                className={`px-4 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
+                  selected === ord
+                    ? 'bg-[#006241] border-[#006241] text-white shadow-xs'
+                    : 'bg-white border-slate-200 text-slate-700 hover:border-[#006241] hover:text-[#006241]'
+                }`}
+              >
+                {ord}
+                {ord === 'ORD-103' && <span className="ml-1 text-[10px] text-amber-300">⚠</span>}
+                {ord === 'ORD-104' && <span className="ml-1 text-[10px] text-blue-300">⏳</span>}
+              </motion.button>
+            ))}
+          </div>
+
+          {/* Copy Button */}
+          <button
+            onClick={() => copyToClipboard(selected)}
+            className="text-xs font-mono font-semibold px-3 py-1 rounded-full border border-slate-200 hover:bg-slate-50 text-slate-600 flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>{copiedId ? '✓ Copied ID' : '📋 Copy ID'}</span>
+          </button>
+        </div>
+
+        {/* Multi-Stream Identifier Trace Breadcrumbs */}
+        <div className="p-3 bg-slate-50 rounded-2xl flex flex-wrap items-center gap-2 text-[11px] font-mono border border-slate-200/60">
+          <span className="text-slate-400 font-sans font-bold">Lifecycle Trace:</span>
+          <span className="font-bold text-[#006241]">ERP: {selected}</span>
+          <span className="text-slate-300">➔</span>
+          <span className="text-slate-700">GW: {gateway?.gateway_payment_id ?? 'gw_tx_001'}</span>
+          <span className="text-slate-300">➔</span>
+          <span className="text-slate-700">UTR: {bank?.utr ?? 'CMS/NACH/901'}</span>
+          <span className="text-slate-300">➔</span>
+          <span className="text-slate-700">Batch: {gateway?.settlement_id ?? 'SETTLE-901'}</span>
         </div>
       </div>
 

@@ -19,7 +19,7 @@
 - **Our Solution**: A deterministic 7-stage engine that matches records across all 4 sources with zero floating-point penny drift.
 - **Our Unfair Advantage**: Real-world digital commerce accounting from the **Aczen Nova Financial API** + **J.P. Morgan AI Research synthetic methodology** for stress testing.
 - **Live Tech Stack**:
-  - **Frontend**: **Next.js + React** (App Router, Tailwind CSS, shadcn/ui patterns) deployed on **Vercel**.
+  - **Frontend**: **React** (Vite, TypeScript, Tailwind CSS, React Bits, Aceternity UI) deployed on **Vercel**. 7 screens: Login, Dashboard, Timeline, Nova Explorer, Exceptions, Settlement Matcher, Recon Report.
   - **Backend**: **Node.js + Express + TypeScript** deployed on **Railway / Render**.
   - **Cache & Mutex**: **Redis** on Railway with graceful in-memory fallback.
   - **Database**: **Supabase PostgreSQL** with `NUMERIC(18,4)` precision, Row Level Security, and append-only audit triggers.
@@ -75,7 +75,7 @@ We ingest real digital commerce accounting data directly from `https://www.aczen
 | **M8** | **Refund/Reversal Handling** | Links refunds to original parent payments; flags missing clawbacks. | Engine Stage 5 (`REFUND_NOT_NETTED`) |
 | **M9** | **Settlement Matching** | Groups individual transactions into 1:N bulk payouts; flags true missing credits. | Engine Stage 6 & Settlement Matcher tab |
 | **M10** | **Exception Management** | Ranks discrepancies by financial risk with human reviewer decision flow. | Exceptions Queue tab (Approve/Reject/Escalate) |
-| **M11** | **Reconciliation Report** | Executive KPI summary, amount-at-risk totals, and tamper-proof audit trail. | Overview Dashboard & Audit Trail tab |
+| **M11** | **Reconciliation Report** | Executive KPI summary, amount-at-risk totals, and tamper-proof audit trail. | Recon Report tab + CSV Export + `/api/report` endpoint |
 
 ---
 
@@ -109,11 +109,13 @@ Stage 7: Amount at Risk Ranking──► Ranks exception cases strictly by highe
 
 | Layer | Technology | Deployment Platform | Key Responsibility |
 |---|---|---|---|
-| **Client Tier** | Single-Page Cockpit (HTML5, Tailwind, Vanilla JS) | **Vercel** (`vercel.json`) | Fast global CDN delivery, 0 cold starts, live REST API integration. |
-| **Backend Tier** | Node.js + Express + TypeScript | **Railway / Render** (`railway.json`, `render.yaml`) | High-performance REST endpoints (`/api`), JWT authentication, deterministic engine. |
+| **Client Tier** | React (Tailwind, React Bits, Aceternity UI) | **Vercel** (`vercel.json`) | Fast global CDN delivery, 0 cold starts, live REST API integration. |
+| **Backend Tier** | Node.js + Express + TypeScript | **Railway / Render** (`railway.json`, `render.yaml`) | High-performance REST endpoints (`/api`), JWT authentication, deterministic engine, CSV report generation. |
 | **Cache & Mutex** | Redis Cache & Distributed Lock | **Railway Redis / Upstash** | Prevents concurrent colliding runs via mutex lock; caches summaries with memory fallback. |
 | **Database Tier** | PostgreSQL 16 | **Supabase** | `NUMERIC(18,4)` currency precision, Row-Level Security (RLS), append-only audit trigger. |
 | **Data Ingestion** | Aczen Nova API + J.P. Morgan Synthetic Engine | **External REST & Internal Generator** | Dual real-world + synthetic edge-case stream ingestion across all 4 financial sources. |
+
+*Note: AI features (Razorpay AI, LLM anomaly detection) and AWS deployment are planned next-phase additions.*
 
 ---
 
@@ -122,9 +124,9 @@ Stage 7: Amount at Risk Ranking──► Ranks exception cases strictly by highe
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      VERCEL HOSTED CLIENT TIER                         │
-│   LedgerSense Unified Financial Cockpit (web/index.html)               │
-│   • Executive Overview   • Multi-Stream Timeline   • Nova Explorer     │
-│   • Exceptions Queue     • Settlement Matcher      • Audit Trail       │
+│   LedgerSense React Frontend (Vite, TypeScript, Tailwind)              │
+│   • Dashboard        • Timeline           • Nova Explorer              │
+│   • Exceptions       • Settlement Matcher • Recon Report               │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │ HTTPS REST + Bearer JWT
                                     ▼
@@ -136,6 +138,7 @@ Stage 7: Amount at Risk Ranking──► Ranks exception cases strictly by highe
 │   │ [ID Match] ➔ [Regex UTR] ➔ [Partial] ➔ [Fee Recalc]           │   │
 │   │ ➔ [Refunds] ➔ [1:N Settlement Match] ➔ [Risk Prioritization]    │   │
 │   └────────────────────────────────────────────────────────────────┘   │
+│   GET /api/report ➔ Generates JSON & CSV Exports                        │
 │            ▲                                     ▲                     │
 │            │ Caches Run Summary & Locks Mutex    │ Ingests Streams     │
 │            ▼                                     ▼                     │
@@ -155,7 +158,16 @@ Stage 7: Amount at Risk Ranking──► Ranks exception cases strictly by highe
 
 ---
 
-# Slide 8: The 6 Unified Cockpit Views in Our Prototype
+# Slide 8: Future Roadmap — Phase 2: AI Features & AWS
+## Scaling for the Enterprise 
+
+- **LLM Anomaly Detection**: Deep-dive generative explanations for complex multi-party exception cases.
+- **Razorpay AI Integration**: Natural language insights to query payment drop-offs, fee inconsistencies, and settlement histories.
+- **AWS Infrastructure Deployment**: Migrating core workloads to **AWS ECS / EKS** for massive parallel scaling and **AWS RDS (PostgreSQL)** for enterprise-grade disaster recovery and compliance.
+
+---
+
+# Slide 9: The 6 Unified Cockpit Views in Our Prototype
 ## Built Specifically for High-Volume Finance Operations
 
 1. **Executive Overview Dashboard**: Real-time high-level metrics — Total Ingested Volume, Successfully Settled Amount, Detected Fee Leakages, and Total Amount at Risk.
@@ -163,24 +175,24 @@ Stage 7: Amount at Risk Ranking──► Ranks exception cases strictly by highe
 3. **Nova 4-Source Explorer**: Live ingestion view displaying records from the Aczen Nova API (`/payments`, `/gateway-transactions`, `/bank-transactions`, `/settlements`) with one-click live sync.
 4. **Exceptions & Risk Queue**: Discrepancies prioritized strictly by financial exposure (`Amount at Risk`) with an interactive review modal for human finance analysts.
 5. **Settlement & UTR Matcher**: One-to-many reconciliation matching lump-sum nodal bank statement deposits with individual gateway transaction batches.
-6. **Immutable Audit Trail**: Tamper-proof log tracking every automated run, sync action, and human decision with UTC timestamps and user attribution.
+6. **Recon Report & Audit Trail**: Full module coverage (11/11), CSV exports via `/api/report`, and a tamper-proof log tracking every human decision with UTC timestamps.
 
 ---
 
-# Slide 9: Step-by-Step Live Demo Presentation Script
+# Slide 10: Step-by-Step Live Demo Presentation Script
 ## Exact 90-Second Walkthrough for Hackathon Evaluators
 
 | Timestamp | View / Screen | Action to Perform | What to Say (Plain English) |
 |---|---|---|---|
-| **0:00 - 0:20** | **Overview Dashboard** | Open `http://localhost:4000` (or Vercel URL). Point to KPI summary cards. | *"Good evening judges. In online payments, one order creates 4 separate records. Most tools guess or use floating-point math that silently leaks money. LedgerSense solves FIN-11 with pure deterministic math, PostgreSQL numeric precision, and live Aczen Nova accounting data."* |
-| **0:20 - 0:40** | **Nova 4-Source Explorer** | Click **'Nova 4-Source'** tab, click **'Sync Nova Feeds'**, then **'Run 7-Stage Recon'**. | *"Notice our terminal log. We just synced 4 real financial streams from the Aczen Nova API. In under 120 milliseconds, our engine ran all 7 deterministic stages in integer paise—identifying matches, calculating fees, and grouping bulk settlements."* |
-| **0:40 - 1:05** | **Multi-Stream Timeline** | Click **'Multi-Stream Timeline'** tab and select order **'ORD-103'**. | *"Look at order ORD-103. The customer paid ₹1,500. Under our contractual schedule (2% MDR + 18% GST), the fee should be ₹35.40. But the gateway charged ₹47.20. LedgerSense immediately caught this ₹10.00 fee leak before money settled."* |
-| **1:05 - 1:25** | **Exceptions Queue** | Click **'Exceptions'** tab. Click **'Review Case'** on CASE-1. Enter a reason and click **'Approve'**. | *"In our Exceptions Queue, cases are ranked strictly by Amount at Risk so analysts fix the biggest leaks first. We open the case, verify the evidence, enter a mandatory rationale, and record the decision."* |
-| **1:25 - 1:30** | **Audit Trail** | Click **'Audit Trail'** tab. Show the recorded decision. | *"The decision is instantly written to our Supabase audit table, which is locked by an immutable trigger that rejects any update or delete."* |
+| **0:00 - 0:20** | **Overview Dashboard** | Open frontend. Point to KPI summary cards. | *"Good evening judges. In online payments, one order creates 4 separate records. Most tools guess or use floating-point math that silently leaks money. LedgerSense solves FIN-11 with pure deterministic math, PostgreSQL numeric precision, and live Aczen Nova accounting data."* |
+| **0:20 - 0:40** | **Nova 4-Source Explorer** | Click **'Nova Explorer'** tab, click **'Sync Nova Feeds'**, then **'Trigger Reconciliation'**. | *"Notice our terminal log. We just synced 4 real financial streams from the Aczen Nova API. In under 120 milliseconds, our engine ran all 7 deterministic stages in integer paise—identifying matches, calculating fees, and grouping bulk settlements."* |
+| **0:40 - 1:05** | **Multi-Stream Timeline** | Click **'Timeline'** tab and select order **'ORD-103'**. | *"Look at order ORD-103. The customer paid ₹1,500. Under our contractual schedule (2% MDR + 18% GST), the fee should be ₹35.40. But the gateway charged ₹47.20. LedgerSense immediately caught this ₹10.00 fee leak before money settled."* |
+| **1:05 - 1:25** | **Exceptions Queue** | Click **'Exceptions'** tab. Click **'Review Case'**. Enter a reason and click **'Approve'**. | *"In our Exceptions Queue, cases are ranked strictly by Amount at Risk so analysts fix the biggest leaks first. We open the case, verify the evidence, enter a mandatory rationale, and record the decision."* |
+| **1:25 - 1:30** | **Recon Report** | Click **'Recon Report'** tab. Show the recorded decision and CSV export button. | *"The decision is instantly written to our Supabase audit table, which is locked by an immutable trigger. We can export this full run as a CSV with our newly implemented report endpoint."* |
 
 ---
 
-# Slide 10: Evaluator Technical Q&A Defense Cheat Sheet
+# Slide 11: Evaluator Technical Q&A Defense Cheat Sheet
 ## Clear, Confident Answers to Tough Jury Questions
 
 - **Q1: Why not use AI or LLMs to automatically approve financial transactions?**
@@ -194,11 +206,11 @@ Stage 7: Amount at Risk Ranking──► Ranks exception cases strictly by highe
 
 ---
 
-# Slide 11: Summary & Why LedgerSense Wins
+# Slide 12: Summary & Why LedgerSense Wins
 ## Mathematical Rigor, Real Data, and Immediate ROI
 
 1. **FIN-11 Problem Statement Optimized**: Every single one of the 11 required modules is implemented and demonstrated.
 2. **Real-World Unfair Advantage**: Real Aczen Nova API digital commerce streams + J.P. Morgan synthetic stress testing.
 3. **Enterprise Data Integrity**: Zero floating-point drift, Row-Level Security, and immutable append-only audit triggers.
-4. **Production Deployment Ready**: Vercel frontend, Railway/Render Node.js API, Redis cache/mutex, and Supabase PostgreSQL.
+4. **Production Deployment Ready**: Vercel React frontend, Railway/Render Node.js API, Redis cache/mutex, and Supabase PostgreSQL.
 5. **Clear Financial ROI**: Recovers 1–2% of GMV lost in hidden payment processor fees and cuts month-end financial close time from days to seconds.

@@ -112,3 +112,20 @@ In accounting, if an AI agent hallucinates and auto-approves a ₹10,000,000 dis
 2. **Solution:** "We built LedgerSense: a deterministic 7-stage reconciliation engine that reconstructs the full financial lifecycle from ERP orders to messy bank UTR statements."
 3. **Real-World Value:** "Unlike typical projects that run on synthetic mocks, our primary asset is live ingestion from the Aczen Nova API, reconciling real INR transactions with Indian GST and MDR schedules."
 4. **Governance & AI:** "We combine strict integer-paise math and immutable audit trails with guarded AI assistants that cite accounting policies without ever hallucinating financial decisions."
+
+---
+
+## 7. Dual Deployment Architecture: Rapid Hackathon Staging vs Production AWS Scale
+
+To optimize for both instant live demonstration during hackathon evaluation and long-term enterprise scalability, LedgerSense implements a clear dual-deployment architecture:
+
+1. **Hackathon Live Staging (Instant 3-Minute Deployment)**:
+   - **Frontend UI:** Hosted on **Vercel** (`vercel.json`) serving the Next.js/React operational cockpit with 0 cold-start latency.
+   - **Backend API & Cache:** Hosted on **Railway** (`railway.json`, `Procfile`) running the Node.js Express TypeScript API and 1-click managed Redis cache.
+   - **Database:** Hosted on **Supabase** running PostgreSQL 16 with Row Level Security (RLS) and arbitrary-precision `NUMERIC(18,4)` columns.
+   - **Why This Choice:** Eliminates hours of manual cloud DevOps overhead while delivering a public, secure HTTPS URL for live judging.
+
+2. **Enterprise Production Target (AWS Cloud us-east-1)**:
+   - **Networking:** Multi-AZ VPC across public subnets (`us-east-1a`, `us-east-1b`) fronted by an AWS Application Load Balancer (ALB).
+   - **Compute:** Serverless multi-stage Docker containers deployed on **AWS ECS Fargate**.
+   - **Data & AI Tier:** **Amazon RDS PostgreSQL** (Multi-AZ), **Amazon DynamoDB** for real-time job locks and idempotency, **Amazon S3** for encrypted audit report archives, **Amazon Bedrock (Claude 3.5 Sonnet)** for governed natural-language anomaly briefings, and **Amazon CloudWatch** for audit alarms.

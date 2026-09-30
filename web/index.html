@@ -908,7 +908,15 @@
   <!-- APPLICATION LOGIC & API DYNAMIC SYNC -->
   <script>
     // Configuration & State
-    const API_BASE = (window.location.port === '4000' || window.location.origin.includes(':4000')) ? '' : 'http://localhost:4000';
+    const urlParams = new URLSearchParams(window.location.search);
+    const queryApi = urlParams.get('api');
+    if (queryApi) {
+      localStorage.setItem('FINATHON_API_BASE', queryApi);
+    }
+    const savedApi = localStorage.getItem('FINATHON_API_BASE');
+    const isDevFrontend = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && 
+                          window.location.port !== '4000' && window.location.port !== '';
+    const API_BASE = queryApi || savedApi || (isDevFrontend ? 'http://localhost:4000' : '');
     let jwtToken = null;
     let isApiConnected = false;
     let activeCaseId = null;

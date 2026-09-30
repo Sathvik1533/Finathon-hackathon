@@ -2,6 +2,7 @@ import app from './server';
 import { loginUser, generateToken } from './auth';
 import { reconEngine } from './reconEngine';
 import { closePool } from './db';
+import { redisCache } from './redis';
 
 process.env.NODE_ENV = 'test';
 
@@ -131,12 +132,68 @@ async function runTests() {
     });
   }
 
+  // Test 7: Redis Cache & Run Summary Caching
+  console.log('[7/9] Testing Redis Cache & Reconciliation Run Summary Cache...');
+  const testRunId = 'RUN-TEST-CACHE-101';
+  const testSummary = {
+    runId: testRunId,
+    matchedCount: 42,
+    discrepancyCount: 3,
+    status: 'COMPLETED',
+  };
+  await redisCache.cacheRunSummary(testRunId, testSummary, 60);
+  const fetchedSummary = await redisCache.getRunSummary(testRunId);
+  if (!fetchedSummary || fetchedSummary.runId !== testRunId || fetchedSummary.matchedCount !== 42) {
+    throw new Error(`Cache failed to store/retrieve summary: ${JSON.stringify(fetchedSummary)}`);
+  }
+  console.log('  ✓ Run summary successfully cached and retrieved');
+
+  // Test 8: Distributed Mutex Job Lock & Concurrency Guard
+  console.log('[8/9] Testing Distributed Mutex Job Locking & Fallback...');
+  const lockA = await redisCache.acquireLock('job:settlement_batch', 10);
+  if (!lockA.acquired) {
+    throw new Error('Initial lock acquisition failed');
+  }
+  // Attempt concurrent lock acquisition on same resource - must fail
+  const lockB = await redisCache.acquireLock('job:settlement_batch', 10);
+  if (lockB.acquired) {
+    throw new Error('Concurrent lock acquisition should have been rejected');
+  }
+  console.log('  ✓ Mutex lock prevented concurrent colliding job execution');
+  const released = await lockA.release();
+  if (!released) {
+    throw new Error('Lock release returned false');
+  }
+  // Now lock can be re-acquired
+  const lockC = await redisCache.acquireLock('job:settlement_batch', 10);
+  if (!lockC.acquired) {
+    throw new Error('Re-acquiring lock after release failed');
+  }
+  await lockC.release();
+  console.log('  ✓ Lock successfully released and re-acquired');
+
+  // Test 9: Redis Status Endpoint & Health Integration
+  console.log('[9/9] Testing Redis Status and Health Endpoint Integration...');
+  await new Promise<void>((resolve, reject) => {
+    const mockRes = createMockResponse((status, data) => {
+      if (status !== 200 || !data.redis || !data.redis.mode) {
+        reject(new Error(`Expected 200 with redis status, got ${status}: ${JSON.stringify(data)}`));
+      } else {
+        console.log(`  ✓ /api/health returned redis status (mode: ${data.redis.mode}, connected: ${data.redis.connected})`);
+        resolve();
+      }
+    });
+    (app as any).handle({ method: 'GET', url: '/api/health', headers: {} }, mockRes);
+  });
+
+  await redisCache.close();
   await closePool();
   console.log('======================================================');
   console.log('  ✓ ALL NODE.JS EXPRESS BACKEND CHECKS PASSED!');
   console.log('======================================================');
   process.exit(0);
 }
+
 
 runTests().catch(async (err) => {
   console.error('Test failed:', err);

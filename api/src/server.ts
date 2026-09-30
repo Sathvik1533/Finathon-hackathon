@@ -217,17 +217,19 @@ app.get('/api/reconcile/latest', authenticate, async (req: AuthenticatedRequest,
 });
 
 app.get('/api/reconcile/summary/:runId', authenticate, async (req: AuthenticatedRequest, res: Response) => {
-  const cached = await redisCache.getRunSummary(req.params.runId);
+  const runId = String(req.params.runId);
+  const cached = await redisCache.getRunSummary(runId);
   if (cached) {
     res.json(cached);
     return;
   }
-  if (latestRun && latestRun.runId === req.params.runId) {
+  if (latestRun && latestRun.runId === runId) {
     res.json(latestRun);
     return;
   }
-  res.status(404).json({ error: `Run summary for ${req.params.runId} not found` });
+  res.status(404).json({ error: `Run summary for ${runId} not found` });
 });
+
 
 // 5. Exception Management & Review Cases (B8)
 app.get('/api/cases', authenticate, async (req: AuthenticatedRequest, res: Response) => {

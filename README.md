@@ -8,7 +8,7 @@ Automated Continuous Integration and Continuous Deployment (CI/CD) pipeline for 
 
 ---
 
-## 🚀 CI/CD Pipeline Architecture
+## CI/CD Pipeline Architecture
 
 This repository is equipped with GitHub Actions workflows designed to automate validation, testing, security scanning, packaging, and deployments.
 
@@ -39,19 +39,18 @@ This repository is equipped with GitHub Actions workflows designed to automate v
 
 ---
 
-## 🛠 Local CI Execution
+## Local CI Execution
 
-You can run the exact same verification suite locally before committing:
+You can run the same verification suite locally before committing:
 
 ```bash
-# Execute local CI runner
 ./scripts/ci.sh
-
 # Or via Makefile
 make ci
 ```
 
 ### Additional Developer Commands
+
 ```bash
 make install   # Install development and testing dependencies
 make test      # Run pytest suite
@@ -61,7 +60,7 @@ make run       # Start local development server (http://localhost:8000)
 
 ---
 
-## 🔐 Deployment Secrets Configuration
+## Deployment Secrets Configuration
 
 To connect the CD pipeline with your cloud hosting or webhook endpoints, configure the following repository secrets under **Settings > Secrets and variables > Actions**:
 
@@ -71,3 +70,15 @@ To connect the CD pipeline with your cloud hosting or webhook endpoints, configu
 | `DEPLOY_WEBHOOK_URL_PROD` | Deployment webhook URL for production environment | Optional |
 
 If webhook secrets are omitted, the CD pipeline runs in simulation mode, validating packaging and artifact integrity.
+
+---
+
+## FIN-11 LedgerSense Documentation
+
+Implementation documentation for data onboarding and synthetic generation, database design, backend APIs, the AI service, frontend screens, AWS deployment, and the end-to-end MVP completion checklist is available in [`docs/fin11/`](docs/fin11/README.md).
+
+- [FIN-11 documentation index](docs/fin11/README.md)
+- [MVP completion checklist](docs/fin11/FIN-11_7_MVP_Completion_Checklist.md)
+- [AWS deployment guide](docs/fin11/FIN-11_6_Deployment_Guide_AWS.md)
+
+See the index for the full guide list and suggested reading order.

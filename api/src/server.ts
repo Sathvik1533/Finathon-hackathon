@@ -55,15 +55,22 @@ const auditLogs: any[] = [];
 app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
   const dbHealth = await checkDbHealth();
   const novaStatus = novaClient.getStatus();
+  const redisStatus = redisCache.getStatus();
   res.json({
     status: 'healthy',
     service: 'finathon-api',
-    stack: 'Node.js + Express + TypeScript + PostgreSQL',
+    stack: 'Node.js + Express + TypeScript + PostgreSQL + Redis',
     timestamp: new Date().toISOString(),
     database: dbHealth,
     nova: novaStatus,
+    redis: redisStatus,
   });
 });
+
+app.get('/api/redis/status', (req: Request, res: Response) => {
+  res.json(redisCache.getStatus());
+});
+
 
 app.get('/api/db/status', async (req: Request, res: Response) => {
   const dbHealth = await checkDbHealth();
@@ -148,8 +155,17 @@ app.post('/api/nova/sync', authenticate, async (req: AuthenticatedRequest, res: 
   }
 });
 
-// 4. 7-Stage Reconciliation Run (B6)
+// 4. 7-Stage Reconciliation Run (B6) with Distributed Job Locking & Cache
 app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  // Acquire distributed mutex lock to prevent concurrent reconciliation runs
+  const lock = await redisCache.acquireLock('reconciliation:run', 30);
+  if (!lock.acquired) {
+    res.status(409).json({
+      error: 'Reconciliation run already in progress. Mutex lock held by another worker.',
+    });
+    return;
+  }
+
   try {
     const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
       novaClient.fetchPayments(),
@@ -161,6 +177,10 @@ app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, r
     const result = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
     currentCases = result.cases;
     latestRun = result;
+
+    // Cache summary in Redis / Memory store
+    await redisCache.cacheRunSummary(result.runId, result);
+    await redisCache.setLatestRunSummary(result);
 
     auditLogs.unshift({
       action: 'RECONCILIATION_RUN_COMPLETED',
@@ -177,17 +197,49 @@ app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, r
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: 'Reconciliation failed', details: err.message });
+  } finally {
+    await lock.release();
   }
 });
 
+// Cache query endpoints for run summaries
+app.get('/api/reconcile/latest', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const cached = await redisCache.getLatestRunSummary();
+  if (cached) {
+    res.json(cached);
+    return;
+  }
+  if (latestRun) {
+    res.json(latestRun);
+    return;
+  }
+  res.status(404).json({ error: 'No reconciliation run recorded yet' });
+});
+
+app.get('/api/reconcile/summary/:runId', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const cached = await redisCache.getRunSummary(req.params.runId);
+  if (cached) {
+    res.json(cached);
+    return;
+  }
+  if (latestRun && latestRun.runId === req.params.runId) {
+    res.json(latestRun);
+    return;
+  }
+  res.status(404).json({ error: `Run summary for ${req.params.runId} not found` });
+});
+
 // 5. Exception Management & Review Cases (B8)
-app.get('/api/cases', authenticate, (req: AuthenticatedRequest, res: Response) => {
+app.get('/api/cases', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const cachedLatest = await redisCache.getLatestRunSummary();
   res.json({
     total: currentCases.length,
     cases: currentCases,
-    latestRunSummary: latestRun,
+    latestRunSummary: cachedLatest || latestRun,
+    cacheStatus: redisCache.getStatus(),
   });
 });
+
 
 app.get('/api/cases/:id', authenticate, (req: AuthenticatedRequest, res: Response) => {
   const caseItem = currentCases.find((c) => c.caseId === req.params.id);

@@ -1,117 +1,122 @@
-# FIN-11 LedgerSense | AWS Cloud Architecture & Image Prompt (Light Theme)
+# FIN-11 LedgerSense | Real Architecture Flowchart & Image Generation Prompt
 
-> **Visual Style Reference**: Modeled strictly after the **EasePrint – AWS Cloud Architecture** layout (Clean white background, clear bordered containers, colored AWS service badges, legible typography, 16:9 widescreen format).
+> **Visual Style**: Clean Light Mode (Pure White `#ffffff` background, soft slate borders `#e2e8f0`, modern vibrant accent tags: Blue `#2563eb`, Green `#10b981`, Amber `#f59e0b`, Purple `#8b5cf6`).
+> **Real Tech Stack**: Vercel (Frontend) • Railway / Render (Backend API + Redis) • Supabase (PostgreSQL) • Aczen Nova API • J.P. Morgan Synthetic Data Engine.
+> **Zero Fluff**: 100% accurate to the real codebase, working prototype, and active deployments.
 
 ---
 
-## 1. High-Resolution Architecture Flowchart (Mermaid)
+## 1. Complete Architecture Flowchart (Mermaid)
 
 ```mermaid
 flowchart TD
     %% Tiers definition
-    subgraph CLIENT_TIER["Client Tier (Finance & Operations Channels)"]
-        UI1["React / Next.js Web Portal\n(Executive Dashboard • Ingestion • Reviewer Modal)"]
-        UI2["Finance Staff Command Center\n(Amount-at-Risk Queue • Settlement Matcher • Audit Trail)"]
+    subgraph CLIENT["1. Client Tier (Hosted on Vercel)"]
+        COCKPIT["LedgerSense Unified Financial Cockpit\n(Single-Page Modern App in web/index.html via vercel.json)\n• Executive KPI Overview (Volume, Settled, Amount-at-Risk)\n• Multi-Stream Timeline (Order ⇄ Gateway ⇄ Refund ⇄ Bank UTR)\n• Aczen Nova 4-Source Explorer & Sync Button\n• Discrepancy & Exception Queue (Ranked by Amount at Risk)\n• 1:N Settlement & UTR Matcher\n• Immutable Audit Trail Viewer"]
     end
 
-    subgraph EXT_TIER["External Integrations"]
-        NOVA["★ Aczen Nova Financial API\n(GET /payments • GET /gateway-transactions • GET /bank-transactions • GET /settlements)"]
-        WEBHOOKS["Bank Statement & Processor Feeds\n(UTR Clearing Statements • CSV Fallbacks)"]
+    subgraph DATA_FEEDS["2. Ingestion & Data Streams Tier"]
+        NOVA["★ Aczen Nova Financial API (Real Data)\n• GET /payments (Internal orders & gross amounts)\n• GET /gateway-transactions (Captures, 2% MDR fee, 18% GST)\n• GET /bank-transactions (Nodal bank statements & UTRs)\n• GET /settlements (Bulk processor clearing payouts)"]
+        JPMORGAN["★ J.P. Morgan Synthetic Data Engine\n(7-Step ICAIF 2020 Methodology)\n• Simulates realistic banking latency & network jitter\n• Controlled fee leakages & missing bank credits\n• Strict Zero Label Leakage guarantee"]
     end
 
-    subgraph CICD["CI/CD Pipeline"]
-        GH["GitHub Repository\n(Sathvik1533/Finathon-hackathon)"]
-        GHA["GitHub Actions\n(Linting • Secrets Scan • Pytest • Node.js Suite)"]
-        ECR["Amazon ECR\n(Docker Image Registry)"]
-        GH --> GHA --> ECR
+    subgraph BACKEND["3. Backend API Tier (Hosted on Railway / Render)"]
+        EXPRESS["Node.js + Express + TypeScript API (/api)\n• REST Endpoints (/health, /api/auth, /api/nova, /api/reconcile, /api/cases)\n• JWT Role-Based Access Control (Admin & Reviewer Roles)"]
+        
+        ENGINE["7-Stage Deterministic Reconciliation Engine\n(Sub-120ms Integer Math in Memory)\n1. Transaction-ID Matching (Exact 1.0 confidence)\n2. Bank Regex Narration & UTR Parsing\n3. Weighted Partial Matching (Amount 50% + Date 20% + Ref 30%)\n4. Contractual Fee & GST Recalculation (Catches 2% + 18% GST leaks)\n5. Refund & Reversal Netting\n6. 1:N Settlement Batch Aggregation\n7. Amount-at-Risk Exposure Prioritization"]
+
+        REDIS["Redis Distributed Cache & Mutex Lock\n• Atomic run mutex lock (prevents concurrent colliding jobs)\n• Run summary caching for instant sub-millisecond retrieval\n• Graceful in-memory fallback if Redis is offline"]
     end
 
-    subgraph AWS_CLOUD["AWS Cloud (us-east-1)"]
-        subgraph NETWORKING["Networking & Ingress (VPC)"]
-            ALB["Application Load Balancer (ALB)\nPermanent HTTPS Ingress"]
-            SUBNET_A["Public Subnet us-east-1a"]
-            SUBNET_B["Public Subnet us-east-1b"]
-            SUBNET_A --- ALB --- SUBNET_B
-        end
-
-        subgraph COMPUTE["Compute Tier"]
-            ECS["AWS ECS Fargate (Serverless Container)\n• Node.js Express TypeScript API\n• Next.js Frontend Build\n• Deterministic 7-Stage Reconciliation Engine\n  (ID Match ➔ Regex ➔ Partial ➔ Fee ➔ Refund ➔ Batch ➔ Risk Ranking)"]
-        end
-
-        subgraph DATA_AI["Data & AI Tier (Storage, Database & Governed Intelligence)"]
-            RDS[("PostgreSQL Database (RDS / Supabase)\n• Exact NUMERIC(18,4) Decimal Precision\n• Row Level Security (RLS) Tenant Isolation\n• Immutable Append-Only Audit Trigger")]
-            DYNAMO["Amazon DynamoDB\n(Real-Time Job State, Idempotency & Run Locks)"]
-            S3["Amazon S3\n(Encrypted Financial Reports & Audit CSV Archives)"]
-            BEDROCK["Amazon Bedrock (Claude 3.5 Sonnet)\n(Governed Anomaly Explanations with G1-G5 Guardrails)"]
-            CW["Amazon CloudWatch\n(Real-Time Logging, Monitoring & Audit Alarms)"]
-        end
+    subgraph STORAGE["4. Persistence & Security Tier (Hosted on Supabase)"]
+        POSTGRES[("Supabase PostgreSQL Database\n• Exact NUMERIC(18,4) Decimal Precision & Integer Paise (Zero penny drift)\n• Row-Level Security (RLS) Tenant Isolation\n• Immutable Audit Trigger (trg_audit_log_immutable rejects UPDATE/DELETE)")]
     end
 
-    %% Inter-tier connections
-    CLIENT_TIER --> ALB
-    EXT_TIER --> ALB
-    ECR -->|Deploy to ECS (Rolling Update)| ECS
-    ALB --> ECS
-    ECS <--> RDS
-    ECS <--> DYNAMO
-    ECS <--> S3
-    ECS <--> BEDROCK
-    ECS --> CW
+    %% Connections
+    CLIENT -->|HTTPS REST API + Bearer JWT| EXPRESS
+    NOVA -->|Live Ingestion Sync| EXPRESS
+    JPMORGAN -->|Test & Stress Ingestion| EXPRESS
+    EXPRESS -->|Acquires Mutex & Caches Results| REDIS
+    EXPRESS -->|Executes In-Memory Matching| ENGINE
+    EXPRESS <-->|Parameterized Queries & Audit Commits| POSTGRES
+    ENGINE -->|Flags Cases & Discrepancies| POSTGRES
 ```
 
 ---
 
-## 2. ChatGPT Image Generation Prompt (Light Theme, Copy & Paste)
+## 2. ChatGPT / DALL-E Image Generation Prompt (Light Theme)
 
-Copy and paste the prompt below into **ChatGPT (GPT-4o / DALL-E 3)** to generate the crisp, light-mode architecture diagram matching your reference:
+Copy and paste this prompt directly into **ChatGPT (GPT-4o / DALL-E 3)** to create the exact, clean architecture diagram for your slides:
 
 ```text
-Please generate a crisp, clean, professional enterprise cloud software architecture diagram titled:
-"LedgerSense – AWS Cloud Architecture: An End-to-End Payment Reconciliation & Settlement Platform"
+Please generate a crisp, clean, professional enterprise software architecture diagram titled:
+"FIN-11 LedgerSense – End-to-End Payment Reconciliation & Settlement Architecture"
 
-Visual Style & Layout (Exactly like the EasePrint AWS Cloud Architecture reference):
-- Clean bright light theme: Pure white background (#ffffff), soft light-gray section panels (#f8fafc), thin rounded rectangular borders with subtle shadow.
-- High resolution, 16:9 widescreen presentation format.
-- Professional vector typography, crisp colored icons (AWS orange, Docker blue, PostgreSQL blue, DynamoDB blue, Bedrock teal).
+Visual Style & Layout:
+- Clean bright light theme: Pure white background (#ffffff), soft light-gray cards (#f8fafc), thin slate borders (#e2e8f0) with subtle soft drop shadow.
+- High resolution, 16:9 widescreen presentation layout.
+- Professional vector typography, crisp colored icons (Vercel black/blue, Node.js green, Express gray, Redis red, PostgreSQL/Supabase green-blue, Aczen gold).
+- No cluttered dark backgrounds, no 3D isometric clutter. Must look like an elite Stripe / Modern Treasury technical architecture diagram.
 
 Diagram Structure (Top to Bottom):
-1. TOP ROW [Client Tier]:
-   - Blue Box: "React / Next.js Web Portal" (Executive Dashboard, Live Ingestion, Case Reviewer).
-   - Purple Box: "Staff Finance Operations Dashboard" (Queue Management, Settlement Matcher, Audit Trail).
+1. TOP ROW [Client Tier - Hosted on Vercel]:
+   - Wide Blue/Slate Box: "LedgerSense Unified Financial Cockpit (web/index.html on Vercel)"
+   - Badges inside: "Executive KPI Dashboard", "Multi-Stream 4-Source Timeline", "Aczen Nova Feed Explorer", "Amount-at-Risk Exception Queue", "Settlement UTR Matcher", "Immutable Audit Viewer".
 
-2. SECOND ROW [External Integrations]:
-   - Amber/Gold Bordered Box: "Aczen Nova Financial API" (Core Engine: /payments, /gateway-transactions, /bank-transactions, /settlements).
-   - Blue Box: "Payment Gateways & Banking Rails" (Bank Statements, Webhook Payloads, UTR Settlement Feeds).
+2. SECOND ROW [Ingestion & Data Streams]:
+   - Gold/Amber Box: "Aczen Nova Financial API (Real Production Data)" with badges: "GET /payments", "GET /gateway-transactions", "GET /bank-transactions", "GET /settlements".
+   - Violet/Purple Box: "J.P. Morgan AI Research Synthetic Generator (7-Step ICAIF 2020 Methodology)" with badge: "Realistic Latency, Fee Jitter & Edge-Case Stress Testing".
 
-3. LEFT COLUMN [CI/CD Pipeline]:
-   - Stacked vertical flow: "GitHub (Source Code)" -> "GitHub Actions (Build, Lint & Test)" -> "Amazon ECR (Docker Registry)" -> Arrow pointing to ECS Fargate.
+3. MIDDLE ROW [Backend Compute & Engine - Hosted on Railway / Render]:
+   - Green Box: "Node.js + Express + TypeScript Backend API (/api)" with "JWT Auth & RBAC".
+   - Central Cyan Box: "Deterministic 7-Stage Reconciliation Engine (Integer Paise, Sub-120ms)"
+     * Stages: "1. ID Match" -> "2. Regex UTR Parse" -> "3. Partial Match" -> "4. Fee & GST Recalc" -> "5. Refund Netting" -> "6. 1:N Batch Settlement" -> "7. Risk Rank".
+   - Red Box: "Redis Cache & Mutex Lock" (Distributed Job Mutex + Fast Summary Cache + In-Memory Fallback).
 
-4. CENTER & RIGHT [AWS Cloud (us-east-1)]:
-   - Green Ingress Banner: "Networking & Ingress (VPC)" with "Public Subnet us-east-1a", "Application Load Balancer (ALB) HTTPS", "Public Subnet us-east-1b".
-   - Central Red/Orange Container: "Compute Tier - AWS ECS Fargate" (Multi-stage Docker container running Node.js + Express + TypeScript Backend, Next.js Frontend, and the Deterministic 7-Stage Reconciliation Engine).
-   - Right Purple Container: "Data & AI Tier" with:
-     * "PostgreSQL on Supabase / RDS" (Exact NUMERIC(18,4) Currency Precision, Row Level Security, Immutable Audit Triggers).
-     * "Amazon DynamoDB" (Job State, Idempotency & Run Locks).
-     * "Amazon S3" (Encrypted Financial Audit Exports).
-     * "Amazon Bedrock" (Governed AI Anomaly Explanations with G1-G5 Guardrails).
-     * "Amazon CloudWatch" (Real-Time Metrics, Logging & Audit Trails).
+4. BOTTOM ROW [Persistence & Compliance - Hosted on Supabase]:
+   - Teal/Navy Box: "Supabase PostgreSQL Database"
+   - Badges: "Exact NUMERIC(18,4) Decimal Precision", "Row-Level Security (RLS) Tenant Isolation", "Immutable Append-Only Audit Trigger (trg_audit_log_immutable)".
 
-5. BOTTOM FOOTER [Key Features & Benefits]:
-   - Badges along bottom: "0 Precision Loss (NUMERIC)", "Row Level Security (RLS)", "Aczen Nova Real Data", "Deterministic 7-Stage Engine", "Immutable Audit Logs", "Governed AI Assistant".
+5. FOOTER BADGES:
+   - "0 Floating-Point Drift" • "Real Aczen Nova Accounting Data" • "J.P. Morgan Synthetic Stress Tested" • "Vercel + Railway + Supabase Live Deploy" • "Deterministic 7-Stage Math".
 
-All labels must be sharp, legible, and technical. The overall aesthetic must feel clean, corporate, and venture-pitch ready.
+All labels must be sharp, technical, and 100% readable. No misspelled words.
 ```
 
 ---
 
-## 3. How to Present This Slide Live (30-Second Script)
+## 3. 60-Second Teammate Explanation (Plain English Script)
 
-> *"Judges, here is our complete production cloud topology, modeled on standard AWS financial architecture.*
+Anyone on the team can read or memorize this exact 60-second explanation for evaluators:
+
+> *"Judges, let me walk you through our real, working architecture in 60 seconds.*
 > 
-> *Starting on the top left, the **Aczen Nova Financial API** feeds multi-source accounting streams across internal orders, gateway captures, and bank settlement credits.*
+> *1. **The Client Tier:** We built a single, unified financial cockpit in modern HTML5, Tailwind, and JavaScript, deployed instantly on **Vercel**. It gives finance teams a 4-source timeline, an exception reviewer, a settlement matcher, and a live audit log.*
 > 
-> *Requests flow through an **AWS Application Load Balancer** into **AWS ECS Fargate**, running our **Node.js Express TypeScript API** and our **7-stage deterministic reconciliation engine**.*
+> *2. **The Data Ingestion Tier:** We have an unfair advantage: we ingest real digital commerce accounting data directly from the **Aczen Nova Financial API** across orders, gateway captures, bank statements, and settlements with real 2% MDR fees and 18% GST. For edge cases and stress testing, we built a generator following **J.P. Morgan AI Research's 7-step synthetic methodology**.*
 > 
-> *All financial records are stored in **PostgreSQL** with **NUMERIC(18,4) arbitrary precision** and **Row Level Security (RLS)**, ensuring 0 floating-point penny drift and complete tenant isolation.*
+> *3. **The Backend Tier:** Hosted on **Railway and Render**, our **Node.js Express TypeScript API** runs a **7-stage deterministic reconciliation engine**. In under 120 milliseconds, it runs in integer paise without any floating-point drift or hallucination.*
 > 
-> *For enterprise audit compliance, an immutable trigger prevents any alteration of audit logs. For our future roadmap, we integrate **Amazon Bedrock** for governed, explainable AI case briefs while keeping all financial approvals strictly in the hands of human finance analysts."*
+> *4. **Distributed Caching:** We use **Redis** on Railway for run caching and mutex locks so two analysts never collide, with automatic in-memory fallback.*
+> 
+> *5. **The Database:** Our database is **Supabase PostgreSQL** using exact **`NUMERIC(18,4)` precision**, **Row-Level Security** for tenant isolation, and a **tamper-proof database trigger** that violently rejects any deletion of audit logs.*
+> 
+> *This entire stack is live, tested, and running right now."*
+
+---
+
+## 4. Problem Statement (FIN-11) 11 Key Modules Mapping
+
+| FIN-11 Problem Module | Repo Implementation Location | Architecture Component |
+|---|---|---|
+| **1. Internal transaction records** | `api/src/novaClient.ts` (`fetchPayments`) | Aczen Nova `/payments` / Supabase `nova_payments` |
+| **2. Payment gateway records** | `api/src/novaClient.ts` (`fetchGatewayTransactions`) | Aczen Nova `/gateway-transactions` (MDR + GST) |
+| **3. Bank settlement records** | `api/src/novaClient.ts` (`fetchBankTransactions`) | Aczen Nova `/bank-transactions` (UTR statements) |
+| **4. Transaction-ID matching** | `api/src/reconEngine.ts` (Stage 1) | Deterministic Hash Lookup ($O(N)$, Confidence = 1.0) |
+| **5. Reference matching** | `api/src/reconEngine.ts` (Stage 2) | Bank Statement Regex Narration & UTR Parser |
+| **6. Partial matching** | `api/src/reconEngine.ts` (Stage 3) | Multi-Factor Weighted Scoring (Amount + Date + Ref) |
+| **7. Fee calculation** | `api/src/reconEngine.ts` (Stage 4) | Contractual 2% MDR + 18% GST Variance Detector |
+| **8. Refund/reversal handling** | `api/src/reconEngine.ts` (Stage 5) | Refund Netting & Withholding Discrepancy Isolator |
+| **9. Settlement matching** | `api/src/reconEngine.ts` (Stage 6) | 1:N Bulk Credit Aggregator (In-flight vs Missing) |
+| **10. Exception management** | `api/src/server.ts` (`/api/cases/:id/decision`) | Amount-at-Risk Prioritized Queue & Decision Modal |
+| **11. Reconciliation report** | `api/src/server.ts` (`/api/reconcile/latest`) | Executive KPI Summary, Run Dossier & Audit Export |

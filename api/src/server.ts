@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import { config } from './config';
 import { checkDbHealth, initDatabaseSchema, persistReconRun, persistDecision, persistAuditLog } from './db';
@@ -13,8 +14,14 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static web UI
-const webDistPath = path.resolve(__dirname, '../../web');
+// Serve static web UI with robust path detection
+const candidateWebPaths = [
+  path.resolve(__dirname, '../../web'),
+  path.resolve(__dirname, '../web'),
+  path.resolve(process.cwd(), 'web'),
+  path.resolve(process.cwd(), '../web'),
+];
+const webDistPath = candidateWebPaths.find(p => fs.existsSync(p)) || candidateWebPaths[0];
 app.use(express.static(webDistPath));
 
 // In-memory state storage (persisted / synced with DB when connected)
@@ -64,53 +71,50 @@ app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
     database: dbHealth,
     nova: novaStatus,
     redis: redisStatus,
-    cloud: {
-      awsTopology: 'ECS Fargate + ALB + S3 + DynamoDB + Bedrock',
-      region: config.awsRegion,
-      s3Bucket: config.s3Bucket,
-      dynamoTable: config.dynamoTable,
-      bedrockModel: config.bedrockModelId,
-      evaluationTarget: 'Vercel (web) + Railway (api & redis) + Supabase (db)',
+    deployments: {
+      frontend: 'Vercel (web/index.html via vercel.json)',
+      backend: 'Railway / Render (Node.js Express + TypeScript)',
+      database: 'Supabase PostgreSQL (NUMERIC(18,4) + RLS + Audit Triggers)',
+      cache: 'Redis (Railway/Upstash with graceful in-memory fallback)',
+      dataStreams: 'Aczen Nova Financial API (https://www.aczen.in/nova-api/v1) + JP Morgan Synthetic Data Engine',
     },
   });
 });
 
-app.get(['/api/cloud/status', '/api/aws/status'], (req: Request, res: Response) => {
+app.get(['/api/deployment/status', '/api/cloud/status'], (req: Request, res: Response) => {
   res.json({
-    productionCloud: {
-      provider: 'Amazon Web Services (AWS)',
-      topology: 'AWS ECS Fargate + ALB + S3 + DynamoDB + Bedrock',
-      region: config.awsRegion,
-      compute: {
-        type: 'AWS ECS Fargate',
-        containerPort: config.port,
-        autoScaling: '2-10 tasks',
-        healthCheckPath: '/api/health',
+    platform: 'FIN-11 LedgerSense End-to-End Payment Reconciliation & Settlement Engine',
+    status: 'operational',
+    techStack: {
+      frontend: {
+        type: 'Single-Page Financial Cockpit (web/index.html)',
+        hosting: 'Vercel (vercel.json edge deployment)',
+        routes: ['/', '/prototype'],
       },
-      networking: {
-        loadBalancer: 'Application Load Balancer (ALB)',
-        vpc: 'Multi-AZ Public & Private Subnets (us-east-1a, us-east-1b)',
+      backend: {
+        runtime: 'Node.js + Express + TypeScript',
+        hosting: 'Railway / Render (railway.json, render.yaml, nixpacks.toml, Procfile)',
+        port: config.port,
+        engine: '7-Stage Deterministic Reconciliation Engine (Sub-120ms, Zero Precision Loss)',
       },
-      storage: {
-        s3Bucket: config.s3Bucket,
-        encryption: 'SSE-S3 / SSE-KMS',
-        corsEnabled: true,
+      database: {
+        provider: 'Supabase Managed PostgreSQL',
+        precision: 'NUMERIC(18,4) & Integer Paise',
+        security: 'Row Level Security (RLS) Tenant Isolation',
+        compliance: 'trg_audit_log_immutable Append-Only Database Trigger',
       },
-      locking: {
-        dynamoDbTable: config.dynamoTable,
-        redisFallback: redisCache.getStatus(),
+      cacheAndLocking: redisCache.getStatus(),
+      dataStreams: {
+        aczenNova: {
+          url: 'https://www.aczen.in/nova-api/v1',
+          endpoints: ['/payments', '/gateway-transactions', '/bank-transactions', '/settlements'],
+          unfairAdvantage: 'Real INR digital commerce accounting with contractual 2% MDR fees and 18% GST splits',
+        },
+        syntheticEngine: {
+          methodology: 'J.P. Morgan AI Research 7-step synthetic financial dataset generation (Assefa et al., ICAIF 2020)',
+          purpose: 'High-stress edge case simulation with network jitter, timing lags, and zero label leakage',
+        },
       },
-      ai: {
-        provider: 'Amazon Bedrock',
-        modelId: config.bedrockModelId,
-        guardrails: ['G1-Input-Sanitization', 'G2-PII-Masking', 'G3-Read-Only-Rationale', 'G4-Zero-Financial-Execution', 'G5-Immutable-Audit'],
-      },
-    },
-    fastEvaluation: {
-      frontend: 'Vercel (vercel.json, cleanUrls, outputDirectory: web)',
-      backend: 'Railway (railway.json, nixpacks.toml, Procfile)',
-      redis: 'Railway Managed Redis (REDIS_URL)',
-      database: 'Supabase PostgreSQL (pgcrypto, Row-Level Security, Arbitrary Precision)',
     },
   });
 });
@@ -347,6 +351,21 @@ app.get('/api/audit-logs', authenticate, (req: AuthenticatedRequest, res: Respon
     count: auditLogs.length,
     logs: auditLogs,
   });
+});
+
+// Single Page Application fallback for static web routes
+app.use((req: Request, res: Response, next) => {
+  if (req.method !== 'GET') {
+    return next();
+  }
+  if (req.path.startsWith('/api') || req.path === '/health') {
+    return next();
+  }
+  const indexPath = path.join(webDistPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  next();
 });
 
 export default app;

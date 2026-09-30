@@ -7,6 +7,9 @@ export interface CacheStatus {
   mode: 'redis' | 'memory';
   connected: boolean;
   url?: string;
+  host?: string;
+  port?: number;
+  transport?: 'tcp' | 'tls';
   keysCount: number;
   lastError?: string;
 }
@@ -22,33 +25,45 @@ interface InMemoryItem {
   expiresAt?: number;
 }
 
+interface CommandQueueItem {
+  resolve: (res: any) => void;
+  reject: (err: any) => void;
+}
+
+interface RespParseResult {
+  type: string;
+  value: any;
+  bytesConsumed: number;
+}
+
 /**
- * Lightweight native Redis RESP2 protocol client using Node.js built-in 'net' / 'tls'.
- * Eliminates external package dependencies while fully supporting Redis on Railway,
- * Render, Heroku, AWS ElastiCache, or local Docker.
+ * High-performance, dependency-free Redis RESP2 protocol client using Node.js built-in 'net' / 'tls'.
+ * Eliminates external npm package dependencies while fully supporting Redis on Railway,
+ * Render, Heroku, AWS ElastiCache, Upstash, or local Docker.
+ *
+ * Full UTF-8 byte-accurate buffer parsing, atomic Lua lock release, and robust auto-reconnection.
  */
-class MinimalRedisClient {
-  private socket: net.Socket | null = null;
+export class MinimalRedisClient {
+  private socket: net.Socket | tls.TLSSocket | null = null;
   private connected = false;
-  private buffer = '';
-  private commandQueue: Array<{
-    resolve: (res: any) => void;
-    reject: (err: any) => void;
-  }> = [];
-  private host: string;
-  private port: number;
-  private password?: string;
-  private isTls: boolean;
+  private buffer: Buffer = Buffer.alloc(0);
+  private commandQueue: CommandQueueItem[] = [];
+  public host: string;
+  public port: number;
+  public username?: string;
+  public password?: string;
+  public isTls: boolean;
   private connectPromise: Promise<boolean> | null = null;
   public lastError?: string;
 
   constructor(redisUrl?: string) {
-    const urlStr = redisUrl || process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL;
+    const urlStr = redisUrl || config.redisUrl || process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL;
     if (urlStr) {
       try {
         const parsed = new URL(urlStr);
         this.host = parsed.hostname || '127.0.0.1';
         this.port = parseInt(parsed.port || '6379', 10);
+        this.username = parsed.username ? decodeURIComponent(parsed.username) : undefined;
         this.password = parsed.password ? decodeURIComponent(parsed.password) : undefined;
         this.isTls = parsed.protocol === 'rediss:';
       } catch {
@@ -59,6 +74,7 @@ class MinimalRedisClient {
     } else {
       this.host = process.env.REDIS_HOST || '127.0.0.1';
       this.port = parseInt(process.env.REDIS_PORT || '6379', 10);
+      this.username = process.env.REDIS_USERNAME || undefined;
       this.password = process.env.REDIS_PASSWORD || undefined;
       this.isTls = process.env.REDIS_TLS === 'true';
     }
@@ -74,28 +90,26 @@ class MinimalRedisClient {
 
     this.connectPromise = new Promise<boolean>((resolve) => {
       let settled = false;
-      const cleanup = (success: boolean, err?: any) => {
+
+      const finishConnect = (success: boolean, err?: any) => {
         if (settled) return;
         settled = true;
         this.connectPromise = null;
+
         if (!success) {
           this.connected = false;
           this.lastError = err ? (err.message || String(err)) : 'Connection timed out';
+          this.drainQueue(new Error(this.lastError));
           if (this.socket) {
             try { this.socket.destroy(); } catch {}
             this.socket = null;
-          }
-          // Drain any pending command queue with error
-          while (this.commandQueue.length > 0) {
-            const req = this.commandQueue.shift();
-            req?.reject(new Error(this.lastError));
           }
         }
         resolve(success);
       };
 
       const timer = setTimeout(() => {
-        cleanup(false, new Error(`Connection timeout after ${timeoutMs}ms`));
+        finishConnect(false, new Error(`Connection timeout after ${timeoutMs}ms`));
       }, timeoutMs);
 
       try {
@@ -104,21 +118,30 @@ class MinimalRedisClient {
           this.connected = true;
           this.lastError = undefined;
 
-          // If password required, send AUTH
+          // If password required, send AUTH [username] password
           if (this.password) {
             try {
-              await this.executeRaw(['AUTH', this.password]);
+              if (this.username && this.username !== 'default') {
+                await this.executeRaw(['AUTH', this.username, this.password]);
+              } else {
+                await this.executeRaw(['AUTH', this.password]);
+              }
             } catch (authErr: any) {
               this.connected = false;
-              cleanup(false, authErr);
+              finishConnect(false, authErr);
               return;
             }
           }
-          cleanup(true);
+          finishConnect(true);
         };
 
         if (this.isTls) {
-          this.socket = tls.connect(this.port, this.host, { rejectUnauthorized: false }, onConnect);
+          this.socket = tls.connect({
+            host: this.host,
+            port: this.port,
+            servername: this.host,
+            rejectUnauthorized: false,
+          }, onConnect);
         } else {
           this.socket = net.createConnection({ host: this.host, port: this.port }, onConnect);
         }
@@ -126,25 +149,53 @@ class MinimalRedisClient {
         this.socket.setNoDelay(true);
 
         this.socket.on('data', (data: Buffer) => {
-          this.buffer += data.toString('utf8');
+          this.buffer = Buffer.concat([this.buffer, data]);
           this.processBuffer();
         });
 
         this.socket.on('error', (err: any) => {
           this.lastError = err.message;
-          cleanup(false, err);
+          if (!settled) {
+            finishConnect(false, err);
+          } else {
+            this.handleDisconnect(err);
+          }
         });
 
         this.socket.on('close', () => {
-          this.connected = false;
+          if (!settled) {
+            finishConnect(false, new Error('Socket closed during connection'));
+          } else {
+            this.handleDisconnect();
+          }
         });
       } catch (err: any) {
         clearTimeout(timer);
-        cleanup(false, err);
+        finishConnect(false, err);
       }
     });
 
     return this.connectPromise;
+  }
+
+  private handleDisconnect(err?: any) {
+    this.connected = false;
+    if (err) {
+      this.lastError = err.message || String(err);
+    }
+    if (this.socket) {
+      try { this.socket.destroy(); } catch {}
+      this.socket = null;
+    }
+    this.drainQueue(new Error(this.lastError || 'Redis connection closed'));
+    this.buffer = Buffer.alloc(0);
+  }
+
+  private drainQueue(err: Error) {
+    while (this.commandQueue.length > 0) {
+      const req = this.commandQueue.shift();
+      req?.reject(err);
+    }
   }
 
   public isReady(): boolean {
@@ -159,20 +210,23 @@ class MinimalRedisClient {
       }
     }
 
-    // Format RESP2 Array
+    // Format RESP2 Array using byte-accurate length
     let cmd = `*${args.length}\r\n`;
     for (const arg of args) {
       const strVal = String(arg);
-      cmd += `$${Buffer.byteLength(strVal)}\r\n${strVal}\r\n`;
+      cmd += `$${Buffer.byteLength(strVal, 'utf8')}\r\n${strVal}\r\n`;
     }
 
     return new Promise<any>((resolve, reject) => {
       this.commandQueue.push({ resolve, reject });
       try {
-        this.socket!.write(cmd);
+        this.socket!.write(cmd, 'utf8');
       } catch (err) {
-        const req = this.commandQueue.pop();
-        req?.reject(err);
+        const reqIndex = this.commandQueue.findIndex(item => item.resolve === resolve);
+        if (reqIndex !== -1) {
+          this.commandQueue.splice(reqIndex, 1);
+        }
+        reject(err);
       }
     });
   }
@@ -183,7 +237,7 @@ class MinimalRedisClient {
       if (result.type === 'INCOMPLETE') {
         break;
       }
-      this.buffer = this.buffer.slice(result.bytesConsumed);
+      this.buffer = this.buffer.subarray(result.bytesConsumed);
       const req = this.commandQueue.shift();
       if (req) {
         if (result.type === 'ERROR') {
@@ -195,9 +249,17 @@ class MinimalRedisClient {
     }
   }
 
-  private parseRESP(buf: string): { type: string; value: any; bytesConsumed: number } {
+  /**
+   * Byte-accurate RESP2 protocol parser. Correctly parses:
+   * + Simple string
+   * - Error
+   * : Integer
+   * $ Bulk string (byte length accounting for multi-byte UTF-8)
+   * * Array (recursive)
+   */
+  private parseRESP(buf: Buffer): RespParseResult {
     if (buf.length < 3) return { type: 'INCOMPLETE', value: null, bytesConsumed: 0 };
-    const prefix = buf[0];
+    const prefix = String.fromCharCode(buf[0]);
     const crlf = buf.indexOf('\r\n');
     if (crlf === -1) return { type: 'INCOMPLETE', value: null, bytesConsumed: 0 };
 
@@ -205,23 +267,23 @@ class MinimalRedisClient {
       case '+': // Simple String
         return {
           type: 'SIMPLE_STRING',
-          value: buf.slice(1, crlf),
+          value: buf.subarray(1, crlf).toString('utf8'),
           bytesConsumed: crlf + 2,
         };
       case '-': // Error
         return {
           type: 'ERROR',
-          value: buf.slice(1, crlf),
+          value: buf.subarray(1, crlf).toString('utf8'),
           bytesConsumed: crlf + 2,
         };
       case ':': // Integer
         return {
           type: 'INTEGER',
-          value: parseInt(buf.slice(1, crlf), 10),
+          value: parseInt(buf.subarray(1, crlf).toString('utf8'), 10),
           bytesConsumed: crlf + 2,
         };
       case '$': { // Bulk String
-        const len = parseInt(buf.slice(1, crlf), 10);
+        const len = parseInt(buf.subarray(1, crlf).toString('utf8'), 10);
         if (len === -1) {
           return { type: 'NULL', value: null, bytesConsumed: crlf + 2 };
         }
@@ -230,11 +292,35 @@ class MinimalRedisClient {
         if (buf.length < dataEnd + 2) {
           return { type: 'INCOMPLETE', value: null, bytesConsumed: 0 };
         }
-        const val = buf.slice(dataStart, dataEnd);
+        const val = buf.subarray(dataStart, dataEnd).toString('utf8');
         return {
           type: 'BULK_STRING',
           value: val,
           bytesConsumed: dataEnd + 2,
+        };
+      }
+      case '*': { // Array
+        const count = parseInt(buf.subarray(1, crlf).toString('utf8'), 10);
+        if (count === -1) {
+          return { type: 'NULL_ARRAY', value: null, bytesConsumed: crlf + 2 };
+        }
+        if (count === 0) {
+          return { type: 'ARRAY', value: [], bytesConsumed: crlf + 2 };
+        }
+        let offset = crlf + 2;
+        const arr: any[] = [];
+        for (let i = 0; i < count; i++) {
+          const elem = this.parseRESP(buf.subarray(offset));
+          if (elem.type === 'INCOMPLETE') {
+            return { type: 'INCOMPLETE', value: null, bytesConsumed: 0 };
+          }
+          arr.push(elem.value);
+          offset += elem.bytesConsumed;
+        }
+        return {
+          type: 'ARRAY',
+          value: arr,
+          bytesConsumed: offset,
         };
       }
       default:
@@ -248,6 +334,7 @@ class MinimalRedisClient {
 
   public async close(): Promise<void> {
     this.connected = false;
+    this.drainQueue(new Error('Client closed'));
     if (this.socket) {
       try {
         this.socket.end();
@@ -255,58 +342,86 @@ class MinimalRedisClient {
       } catch {}
       this.socket = null;
     }
+    this.buffer = Buffer.alloc(0);
   }
 }
 
 /**
  * Hybrid Redis + In-Memory Cache and Distributed Locking Utility.
- * Provides guaranteed 100% availability: if Redis is unavailable or offline,
+ * Provides guaranteed 100% availability: if Redis is offline or unavailable,
  * all cache, lock, and summary calls seamlessly succeed using in-memory fallbacks.
+ * When Redis becomes reachable, it automatically reconnects and resumes cluster caching.
  */
 export class RedisCacheService {
   private redisClient: MinimalRedisClient;
   private memoryStore: Map<string, InMemoryItem> = new Map();
   private mode: 'redis' | 'memory' = 'memory';
-  private connectionChecked = false;
   private urlConfigured: boolean;
+  private initPromise: Promise<boolean> | null = null;
+  private lastReconnectAttempt = 0;
 
-  constructor() {
-    const rawUrl = process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL;
+  constructor(redisUrl?: string) {
+    const rawUrl = redisUrl || config.redisUrl || process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL;
     this.urlConfigured = Boolean(rawUrl || process.env.REDIS_HOST);
     this.redisClient = new MinimalRedisClient(rawUrl);
 
-    // Initial silent check
     if (this.urlConfigured) {
-      this.initConnection();
+      this.initPromise = this.initConnection();
     } else {
       this.mode = 'memory';
-      this.connectionChecked = true;
     }
   }
 
   private async initConnection(): Promise<boolean> {
     try {
-      const ok = await this.redisClient.connect(1200);
+      const ok = await this.redisClient.connect(1500);
       if (ok) {
         this.mode = 'redis';
-        this.connectionChecked = true;
         return true;
       }
     } catch {}
     this.mode = 'memory';
-    this.connectionChecked = true;
     return false;
+  }
+
+  /**
+   * Transparently checks connection and attempts background re-connect if Redis is configured
+   * but previously failed or dropped.
+   */
+  private async ensureConnection(): Promise<void> {
+    if (this.initPromise) {
+      try {
+        await this.initPromise;
+      } catch {}
+      this.initPromise = null;
+    }
+
+    if (this.urlConfigured && this.mode === 'memory') {
+      const now = Date.now();
+      // Throttle reconnect attempts to at most once every 5 seconds
+      if (now - this.lastReconnectAttempt > 5000) {
+        this.lastReconnectAttempt = now;
+        try {
+          const ok = await this.redisClient.connect(1000);
+          if (ok) {
+            this.mode = 'redis';
+          }
+        } catch {}
+      }
+    }
   }
 
   /**
    * Retrieves string value by key with TTL validation.
    */
   public async get(key: string): Promise<string | null> {
+    await this.ensureConnection();
+
     if (this.mode === 'redis') {
       try {
         const val = await this.redisClient.executeRaw(['GET', key]);
         return typeof val === 'string' ? val : null;
-      } catch (err) {
+      } catch {
         // Fallback to memory on transient failure
         this.mode = 'memory';
       }
@@ -325,6 +440,8 @@ export class RedisCacheService {
    * Sets key value with optional TTL in seconds.
    */
   public async set(key: string, value: string, ttlSeconds?: number): Promise<boolean> {
+    await this.ensureConnection();
+
     if (this.mode === 'redis') {
       try {
         const args = ['SET', key, value];
@@ -367,9 +484,12 @@ export class RedisCacheService {
    * Deletes key from cache.
    */
   public async del(key: string): Promise<boolean> {
+    await this.ensureConnection();
+
     if (this.mode === 'redis') {
       try {
         await this.redisClient.executeRaw(['DEL', key]);
+        this.memoryStore.delete(key);
         return true;
       } catch {
         this.mode = 'memory';
@@ -426,7 +546,7 @@ export class RedisCacheService {
   }
 
   // -------------------------------------------------------------
-  // Distributed Job Locks (Concurreny & Race-Condition Guard)
+  // Distributed Job Locks (Concurrency & Race-Condition Guard)
   // -------------------------------------------------------------
 
   /**
@@ -434,6 +554,7 @@ export class RedisCacheService {
    * Returns a lock handle with an atomic release callback.
    */
   public async acquireLock(lockKey: string, ttlSeconds = 30): Promise<LockHandle> {
+    await this.ensureConnection();
     const token = crypto.randomUUID();
     const redisKey = `lock:${lockKey}`;
 
@@ -477,7 +598,7 @@ export class RedisCacheService {
       };
     }
 
-    // Grant lock
+    // Grant in-memory lock
     this.memoryStore.set(redisKey, {
       value: token,
       expiresAt: now + ttlSeconds * 1000,
@@ -491,29 +612,41 @@ export class RedisCacheService {
   }
 
   /**
-   * Releases a previously acquired lock, validating ownership token.
+   * Releases a previously acquired lock atomically, validating ownership token via Lua script.
    */
   public async releaseLock(lockKey: string, token: string): Promise<boolean> {
     const redisKey = `lock:${lockKey}`;
+    let releasedInRedis = false;
+
     if (this.mode === 'redis') {
       try {
-        const current = await this.redisClient.executeRaw(['GET', redisKey]);
-        if (current === token) {
-          await this.redisClient.executeRaw(['DEL', redisKey]);
-          return true;
-        }
-        return false;
+        // Atomic compare-and-delete via Lua script
+        const lua = 'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end';
+        const res = await this.redisClient.executeRaw(['EVAL', lua, '1', redisKey, token]);
+        releasedInRedis = res === 1;
       } catch {
-        this.mode = 'memory';
+        // Fallback: check GET + DEL if EVAL not permitted
+        try {
+          const current = await this.redisClient.executeRaw(['GET', redisKey]);
+          if (current === token) {
+            await this.redisClient.executeRaw(['DEL', redisKey]);
+            releasedInRedis = true;
+          }
+        } catch {
+          this.mode = 'memory';
+        }
       }
     }
 
-    const current = this.memoryStore.get(redisKey);
-    if (current && current.value === token) {
+    // Always ensure memoryStore is cleaned up if held
+    const currentMem = this.memoryStore.get(redisKey);
+    let releasedInMemory = false;
+    if (currentMem && currentMem.value === token) {
       this.memoryStore.delete(redisKey);
-      return true;
+      releasedInMemory = true;
     }
-    return false;
+
+    return releasedInRedis || releasedInMemory;
   }
 
   /**
@@ -536,10 +669,14 @@ export class RedisCacheService {
   // -------------------------------------------------------------
 
   public getStatus(): CacheStatus {
+    const isConn = this.mode === 'redis' && this.redisClient.isReady();
     return {
       mode: this.mode,
-      connected: this.mode === 'redis' && this.redisClient.isReady(),
+      connected: isConn,
       url: this.urlConfigured ? (process.env.REDIS_URL ? 'configured' : 'local') : undefined,
+      host: this.urlConfigured ? this.redisClient.host : undefined,
+      port: this.urlConfigured ? this.redisClient.port : undefined,
+      transport: this.urlConfigured ? (this.redisClient.isTls ? 'tls' : 'tcp') : undefined,
       keysCount: this.memoryStore.size,
       lastError: this.redisClient.lastError,
     };

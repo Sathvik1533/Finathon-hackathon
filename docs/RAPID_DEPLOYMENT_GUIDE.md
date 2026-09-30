@@ -1,17 +1,16 @@
-# FIN-11 LedgerSense | Rapid Deployment Guide (Railway, Render, Vercel & AWS)
+# FIN-11 LedgerSense | Rapid Deployment Guide (Railway, Render & Vercel)
 
-> **Deadline Target**: Deploy your complete, live, working prototype in **under 3 minutes** before the 9:30 PM evaluation, while highlighting enterprise **AWS Cloud Architecture** in your pitch deck.
+> **Deployment Target**: Deploy your complete, live, working prototype in **under 3 minutes** for evaluation across **Vercel** (Frontend) and **Railway / Render** (Backend & Redis).
 
 ---
 
-## 1. Quick Comparison: Railway vs. Render vs. Vercel vs. AWS
+## 1. Quick Comparison: Railway vs. Render vs. Vercel
 
 | Platform | Deployment Speed | Best For | Redis Included? | Setup Complexity | Config File |
 |---|---|---|---|---|---|
 | **Railway** | **~2 minutes** | Backend API + Redis + Frontend (All-in-One) | Yes (1-click database plugin) | Ultra Low (1-Click GitHub import) | `railway.json`, `Procfile` |
 | **Render** | **~3 minutes** | Backend API + Redis (IaC Blueprint) | Yes (1-click via `render.yaml`) | Very Low (`render.yaml` Blueprint) | `render.yaml` |
-| **Vercel** | **~1 minute** | Standalone Frontend UI | External via Upstash or Railway | Ultra Low (Git connect) | `vercel.json` |
-| **AWS Cloud** | **~20–30 mins** | Enterprise Production Pitch Target | Amazon ElastiCache / DynamoDB | High (VPC, ECS, RDS, ALB, IAM) | `Dockerfile`, CloudFormation/CDK |
+| **Vercel** | **~1 minute** | Standalone Frontend UI Cockpit | External via Railway or Upstash | Ultra Low (Git connect) | `vercel.json` |
 
 ---
 
@@ -49,14 +48,16 @@ Render offers infrastructure-as-code deployment through the included `render.yam
 1. Open [dashboard.render.com](https://dashboard.render.com).
 2. Click **"New +"** ➔ **"Blueprint"**.
 3. Connect your GitHub repository: `Sathvik1533/Finathon-hackathon`.
-4. Render automatically reads `render.yaml` and displays two managed services:
-   - `finathon-api` (Web Service, Node.js runtime)
-   - `finathon-redis` (Managed Redis instance)
+4. Render automatically reads `render.yaml` and provisions:
+   - `finathon-api` (Web Service, Node.js runtime, 100% Free Plan)
+5. Under Environment Variables:
+   - `REDIS_URL`: Leave empty for instant 100% free deployment with built-in graceful in-memory cache/locks, or paste an Upstash / Railway Redis connection URL.
+   - (Optional for paid Render plans): Uncomment `finathon-redis` in `render.yaml` to spin up a managed Redis instance ($7/mo starter plan).
 
 ### Step 2: Apply and Launch
 1. Click **"Apply"**.
-2. Render provisions the Redis cache, injects the internal connection string into `finathon-api`, installs dependencies, and runs `npm run build && npm start`.
-3. Your live API and frontend URL will be active at:
+2. Render installs dependencies, compiles TypeScript, and runs `npm start`.
+3. Your live API and frontend URL will be active immediately at:
    `https://finathon-api.onrender.com`
 
 ---
@@ -79,37 +80,32 @@ If you wish to host the static UI on Vercel's global edge network while keeping 
 
 ---
 
-## 5. Option D: Enterprise Production Target (AWS Cloud Architecture)
+## 5. Option D: Production Stack Summary (Vercel + Railway + Supabase + Redis)
 
-During the hackathon evaluation at 9:30 PM, present this slide to demonstrate why your team chose Railway/Render for the 3-minute live prototype while engineering the system for enterprise AWS:
+During the hackathon evaluation, present our production stack topology:
 
 ```
-[ Clients / Web Dashboard ]
+[ Clients / Web Cockpit on Vercel ]
            │
+           │ HTTPS / REST (JWT Auth)
            ▼
-[ AWS CloudFront CDN + S3 ] (Edge Static Content)
+[ Railway / Render API Container ]
+(Node.js + Express + TypeScript on Port 4000)
            │
-           ▼
-[ Application Load Balancer (ALB) ] (SSL Termination, us-east-1)
-           │
-    ┌──────┴──────────────────────────┐
-    ▼                                 ▼
-[ ECS Fargate Task 1 ]        [ ECS Fargate Task 2 ]
-(Node.js / Express Container) (Node.js / Express Container)
-    │                                 │
-    ├───────────────┬─────────────────┤
-    ▼               ▼                 ▼
-[ Amazon RDS ] [ Amazon ElastiCache ] [ Amazon Bedrock ]
-PostgreSQL Multi-AZ     Redis Cluster       Claude / Nova AI
-(ACID Balance Data)    (Job Locks & Cache) (Guarded Case Explanations)
+           ├──────────────────────────────┬──────────────────────────────┐
+           ▼                              ▼                              ▼
+[ Supabase PostgreSQL ]          [ Managed Redis ]             [ Data Streams Tier ]
+- NUMERIC(18,4) & Integer Paise  - Distributed Job Mutex       - Aczen Nova Financial API
+- Row-Level Security (RLS)       - Run Summary Cache           - J.P. Morgan Synthetic Engine
+- Append-Only Audit Trigger      - Graceful In-Memory Fallback
 ```
 
-### AWS Enterprise Mapping:
-- **Compute**: AWS ECS Fargate with container tasks auto-scaling based on CPU/Memory load.
-- **Cache & Concurrency**: Amazon ElastiCache (Redis) providing distributed mutex locks (`reconciliation:run`) to prevent double-processing.
-- **Database**: Amazon RDS PostgreSQL with Multi-AZ replication, `NUMERIC(18,4)` precision, and Row-Level Security.
-- **AI Explanations**: Amazon Bedrock with strict human-in-the-loop guardrails (AI explains; humans approve).
-- **Audit Compliance**: AWS CloudTrail and S3 Object Lock for WORM (Write Once, Read Many) compliance.
+### Production Tier Mapping:
+- **Client Tier**: Vercel edge CDN delivering `web/index.html` with instant load time and zero cold starts.
+- **Compute Tier**: Node.js + Express + TypeScript API on Railway / Render running the 7-stage engine in under 120ms.
+- **Cache & Mutex**: Redis distributed lock preventing duplicate simultaneous reconciliation runs.
+- **Database**: Supabase PostgreSQL with `NUMERIC(18,4)` precision, Row-Level Security, and immutable audit triggers.
+- **Data Ingestion**: Real-world Aczen Nova Financial API streams + J.P. Morgan synthetic stress-testing engine.
 
 ---
 

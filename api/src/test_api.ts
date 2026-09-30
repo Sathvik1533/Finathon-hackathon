@@ -1,8 +1,9 @@
+import net from 'net';
 import app from './server';
 import { loginUser, generateToken } from './auth';
 import { reconEngine } from './reconEngine';
 import { closePool } from './db';
-import { redisCache } from './redis';
+import { redisCache, MinimalRedisClient, RedisCacheService } from './redis';
 
 process.env.NODE_ENV = 'test';
 
@@ -173,7 +174,7 @@ async function runTests() {
   console.log('  ✓ Lock successfully released and re-acquired');
 
   // Test 9: Redis Status Endpoint & Health Integration
-  console.log('[9/9] Testing Redis Status and Health Endpoint Integration...');
+  console.log('[9/11] Testing Redis Status and Health Endpoint Integration...');
   await new Promise<void>((resolve, reject) => {
     const mockRes = createMockResponse((status, data) => {
       if (status !== 200 || !data.redis || !data.redis.mode) {
@@ -186,10 +187,113 @@ async function runTests() {
     (app as any).handle({ method: 'GET', url: '/api/health', headers: {} }, mockRes);
   });
 
+  // Test 10: Live TCP RESP2 Protocol & Multi-byte UTF-8 Verification (Mock Redis Socket)
+  console.log('[10/11] Testing Live TCP RESP2 Protocol & Multi-byte UTF-8 Storage...');
+  const mockServerPort = 63891;
+  const mockDb: Map<string, string> = new Map();
+  const mockServer = net.createServer((socket) => {
+    socket.on('data', (buf: Buffer) => {
+      const text = buf.toString('utf8');
+      if (text.includes('PING')) {
+        socket.write('+PONG\r\n');
+      } else if (text.includes('SET') && text.includes('NX')) {
+        // Simple SET NX simulation
+        const parts = text.split('\r\n').filter(s => s && !s.startsWith('*') && !s.startsWith('$'));
+        const key = parts[1];
+        const val = parts[2];
+        if (mockDb.has(key)) {
+          socket.write('$-1\r\n');
+        } else {
+          mockDb.set(key, val);
+          socket.write('+OK\r\n');
+        }
+      } else if (text.includes('SET')) {
+        const parts = text.split('\r\n').filter(s => s && !s.startsWith('*') && !s.startsWith('$'));
+        const key = parts[1];
+        const val = parts[2];
+        mockDb.set(key, val);
+        socket.write('+OK\r\n');
+      } else if (text.includes('GET')) {
+        const parts = text.split('\r\n').filter(s => s && !s.startsWith('*') && !s.startsWith('$'));
+        const key = parts[1];
+        const val = mockDb.get(key);
+        if (val === undefined) {
+          socket.write('$-1\r\n');
+        } else {
+          const byteLen = Buffer.byteLength(val, 'utf8');
+          socket.write(`$${byteLen}\r\n${val}\r\n`);
+        }
+      } else if (text.includes('EVAL')) {
+        // Lua script simulation for lock release
+        const parts = text.split('\r\n').filter(s => s && !s.startsWith('*') && !s.startsWith('$'));
+        // EVAL <script> <numkeys> <key> <token>
+        const key = parts[3];
+        const token = parts[4];
+        if (mockDb.get(key) === token) {
+          mockDb.delete(key);
+          socket.write(':1\r\n');
+        } else {
+          socket.write(':0\r\n');
+        }
+      } else if (text.includes('DEL')) {
+        const parts = text.split('\r\n').filter(s => s && !s.startsWith('*') && !s.startsWith('$'));
+        mockDb.delete(parts[1]);
+        socket.write(':1\r\n');
+      } else {
+        socket.write('+OK\r\n');
+      }
+    });
+  });
+
+  await new Promise<void>((res) => mockServer.listen(mockServerPort, '127.0.0.1', () => res()));
+  const liveTcpClient = new MinimalRedisClient(`redis://127.0.0.1:${mockServerPort}`);
+  const connected = await liveTcpClient.connect();
+  if (!connected) {
+    throw new Error('Failed to connect to local mock Redis server');
+  }
+
+  // Verify multi-byte currency character round-trip
+  const testCurrencyString = '₹ 1,50,000.75 - Settlement Payout (INR)';
+  await liveTcpClient.executeRaw(['SET', 'test:currency', testCurrencyString]);
+  const fetchedVal = await liveTcpClient.executeRaw(['GET', 'test:currency']);
+  if (fetchedVal !== testCurrencyString) {
+    throw new Error(`Expected "${testCurrencyString}", got "${fetchedVal}"`);
+  }
+  console.log(`  ✓ TCP RESP2 protocol successfully stored & retrieved multi-byte UTF-8 string ("${fetchedVal}")`);
+
+  // Test 11: Atomic Lua Distributed Lock Release over Live TCP
+  console.log('[11/11] Testing Atomic Lua Lock Release & Socket Drain over Live TCP...');
+  const tcpCache = new RedisCacheService(`redis://127.0.0.1:${mockServerPort}`);
+  const tcpLock = await tcpCache.acquireLock('critical_payout_job', 30);
+  if (!tcpLock.acquired) {
+    throw new Error('Failed to acquire lock over TCP Redis');
+  }
+  // Colliding acquire must fail
+  const tcpCollidingLock = await tcpCache.acquireLock('critical_payout_job', 30);
+  if (tcpCollidingLock.acquired) {
+    throw new Error('Colliding lock was improperly acquired');
+  }
+  // Release lock
+  const releasedOk = await tcpLock.release();
+  if (!releasedOk) {
+    throw new Error('TCP lock release returned false');
+  }
+  // Re-acquire after release must succeed
+  const tcpReacquired = await tcpCache.acquireLock('critical_payout_job', 30);
+  if (!tcpReacquired.acquired) {
+    throw new Error('Re-acquiring lock over TCP failed');
+  }
+  await tcpReacquired.release();
+  console.log('  ✓ Atomic Lua distributed lock release & re-acquisition verified over real TCP socket');
+
+  await tcpCache.close();
+  await liveTcpClient.close();
+  await new Promise<void>((res) => mockServer.close(() => res()));
+
   await redisCache.close();
   await closePool();
   console.log('======================================================');
-  console.log('  ✓ ALL NODE.JS EXPRESS BACKEND CHECKS PASSED!');
+  console.log('  ✓ ALL 11 NODE.JS EXPRESS BACKEND CHECKS PASSED!');
   console.log('======================================================');
   process.exit(0);
 }

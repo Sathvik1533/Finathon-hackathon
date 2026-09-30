@@ -1,13 +1,12 @@
 services:
-  # 1. Finathon Node.js API + Static Dashboard Service
+  # 1. Finathon Node.js API + Static Dashboard Service (1-Click Free Tier Deploy)
   - type: web
     name: finathon-api
     runtime: node
     plan: free
     region: oregon
-    rootDir: api
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    buildCommand: cd api && npm install && npm run build
+    startCommand: cd api && npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
@@ -18,16 +17,16 @@ services:
         generateValue: true
       - key: DEMO_MERCHANT_ID
         value: m_demo_finathon
+      # Optional: paste your Upstash or Railway Redis URL.
+      # If omitted, the API automatically uses its built-in in-memory fallback.
       - key: REDIS_URL
-        fromService:
-          type: redis
-          name: finathon-redis
-          property: connectionString
+        sync: false
 
-  # 2. Internal Redis Cache & Mutex Store
-  - type: redis
-    name: finathon-redis
-    plan: free
-    region: oregon
-    maxmemoryPolicy: allkeys-lru
-    ipAllowList: []
+  # 2. Managed Redis Cache (Optional: Render Redis requires 'starter' plan at $7/mo)
+  # Uncomment the block below if you have a paid Render plan:
+  # - type: redis
+  #   name: finathon-redis
+  #   plan: starter
+  #   region: oregon
+  #   maxmemoryPolicy: allkeys-lru
+  #   ipAllowList: []

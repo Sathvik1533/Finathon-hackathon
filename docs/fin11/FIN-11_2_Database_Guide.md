@@ -1,9 +1,15 @@
-# FIN-11 LedgerSense | Database Guide (v2)
+# FIN-11 LedgerSense | Database Guide (v3)
 
-**Parent guide:** FIN-11 Project Guide. If they disagree, the parent wins, then raise a contract PR.
+**Parent guide:** FIN-11 Main Guide (`FIN-11_0_Main_Guide_End_to_End.md`). If they disagree, the parent wins, then raise a contract PR.
 **Database:** PostgreSQL only (AWS RDS in production, `pgvector/pgvector` image in local docker-compose). No other datastore. Redis only if time permits.
 **Track:** Database. Owns `/db` and `/infra/db`. Branch prefix `feat/db/*`. Only the database owner merges migrations. Never edit a merged migration; add a new one.
 **Related:** Data Guide (Nova + synthetic) for why the new tables exist.
+
+## What changed in v3
+1. **0008_lab.sql fixed:** `lab_comparisons` can now really refuse a profile of another merchant (`UNIQUE (id, merchant_id)` on `metric_profiles` plus composite foreign keys). In v2 the plain foreign keys could not enforce the tenant rule that prompt D9 asked to prove.
+2. **0007 Down migration fixed:** dependent `runs` are deleted before the Nova batches; the Down is dev-only (production rollback is the RDS snapshot).
+3. **Phase 2 migrations 0010 and 0011** (Razorpay) are specified in the Razorpay Guide (Doc 11, section 7) and built on branch `feat/db/razorpay` after the end-to-end gate.
+4. Migration numbers 0007 to 0011 are reserved; nobody picks a number.
 
 ## What changed in v2
 1. New migration **0007_nova.sql**: `nova_imports`, `nova_records`, `source_settlements`, `nova_id` columns, `refunds.kind`, and `batches.source` now allows `nova`.
@@ -34,8 +40,10 @@
 | 0005_roles_grants.sql | feat/db/roles-security | least-privilege grants (roles created by bootstrap.sql) |
 | 0006_views.sql | feat/db/indexes-views | summary and benchmark views |
 | **0007_nova.sql** | **feat/db/nova** | **Nova import tables and columns** |
-| **0008_lab.sql** | **feat/db/lab** | **metric_profiles** |
+| **0008_lab.sql** | **feat/db/lab** | **metric_profiles, lab_comparisons (tenant-safe foreign keys)** |
 | db/seed, db/reset.sh | feat/db/seed-scripts | demo merchants, users, config v1, policies, prompts |
+| **0010_razorpay.sql** (Phase 2) | **feat/db/razorpay** | **razorpay_imports, razorpay_records, razorpay_webhook_events, `razorpay` source, merchant account id** |
+| **0011_grants_razorpay.sql** (Phase 2) | **feat/db/razorpay** | **grants for the 0010 tables** |
 
 Order of merge: 0001, 0002, 0003, then 0005 roles (bootstrap first), 0004, 0006, 0007, 0008. Grants for 0007 and 0008 are appended in a new file `0009_grants_nova_lab.sql` so 0005 stays immutable once merged (section 5).
 
@@ -60,7 +68,7 @@ CREATE UNIQUE INDEX users_email_uq ON users (lower(email));
 CREATE TABLE batches (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   merchant_id uuid NOT NULL REFERENCES merchants(id),
-  source text NOT NULL CHECK (source IN ('simulated','upload')),   -- widened in 0007
+  source text NOT NULL CHECK (source IN ('simulated','upload')),   -- widened in 0007 (nova) and 0010 (razorpay)
   params jsonb NOT NULL DEFAULT '{}',
   created_by uuid REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now());
 CREATE INDEX batches_merchant_created_idx ON batches (merchant_id, created_at DESC);
@@ -334,11 +342,12 @@ ALTER TABLE bank_credits DROP COLUMN bank_ref, DROP COLUMN nova_id;
 ALTER TABLE gateway_txns DROP COLUMN bank_rrn, DROP COLUMN gateway_ref, DROP COLUMN nova_id;
 ALTER TABLE internal_txns DROP COLUMN nova_id;
 DROP TABLE source_settlements, nova_records, nova_imports;
+DELETE FROM runs WHERE batch_id IN (SELECT id FROM batches WHERE source = 'nova');   -- dev only; fails if decisions exist (audit_log is append-only)
 DELETE FROM batches WHERE source = 'nova';
 ALTER TABLE batches DROP CONSTRAINT batches_source_check;
 ALTER TABLE batches ADD CONSTRAINT batches_source_check CHECK (source IN ('simulated','upload'));
 ```
-Notes: `nova_records` keeps raw Nova JSON (company data). It never contains the API key. Rows are deleted with the import (cascade); `api_app` has no DELETE, so retention is handled by the release script as `migrator` (documented in the Deployment Guide).
+Notes: this Down is for development databases. In production, rollback means restoring the pre-migration snapshot, because `audit_log` (append-only) may reference exceptions of Nova runs. `nova_records` keeps raw Nova JSON (company data). It never contains the API key. Rows are deleted with the import (cascade); `api_app` has no DELETE, so retention is handled by the release script as `migrator` (documented in the Deployment Guide).
 
 ### 0008_lab.sql (branch feat/db/lab)
 ```sql
@@ -351,16 +360,19 @@ CREATE TABLE metric_profiles (
   metrics jsonb NOT NULL,          -- catalogue in Data Guide 8.1; scalars plus raw samples/CDF points
   generator_params jsonb,          -- for calibration output: fee_bps, lag histogram, amount quantiles...
   seed bigint,
-  created_by uuid REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now());
+  created_by uuid REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (id, merchant_id));       -- v3: target for composite foreign keys (tenant safety)
 CREATE INDEX metric_profiles_merchant_idx ON metric_profiles (merchant_id, kind, created_at DESC);
 CREATE TABLE lab_comparisons (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   merchant_id uuid NOT NULL REFERENCES merchants(id),
-  real_profile_id uuid NOT NULL REFERENCES metric_profiles(id),
-  synthetic_profile_id uuid NOT NULL REFERENCES metric_profiles(id),
+  real_profile_id uuid NOT NULL,
+  synthetic_profile_id uuid NOT NULL,
   iteration int NOT NULL DEFAULT 1, config_version int NOT NULL,
   result jsonb NOT NULL,           -- per metric: real, synthetic, error, verdict, parameter_hint
-  created_by uuid REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now());
+  created_by uuid REFERENCES users(id), created_at timestamptz NOT NULL DEFAULT now(),
+  FOREIGN KEY (real_profile_id, merchant_id)      REFERENCES metric_profiles (id, merchant_id),
+  FOREIGN KEY (synthetic_profile_id, merchant_id) REFERENCES metric_profiles (id, merchant_id));   -- v3: cross-tenant reference is impossible
 CREATE INDEX lab_comparisons_merchant_idx ON lab_comparisons (merchant_id, created_at DESC);
 -- Down Migration
 DROP TABLE lab_comparisons, metric_profiles;
@@ -377,6 +389,9 @@ REVOKE ALL ON nova_imports, source_settlements, nova_records, metric_profiles, l
 ```
 
 ---
+
+### 0010 and 0011 (Phase 2, Razorpay)
+Specified in full in `FIN-11_11_Razorpay_Integration_Guide.md`, section 7. Summary: `batches.source` also allows `razorpay`; new tables `razorpay_imports`, `razorpay_records` (raw payloads, insert-only), `razorpay_webhook_events` (verified events only, unique `event_id`); `merchants.razorpay_account_id`; `razorpay_id` columns on the four source tables; grants for `api_app` only. `ai_service` gets nothing. Build only after the end-to-end gate.
 
 ## 5. Ground-truth contract (unchanged) and two new rules
 ```json
@@ -404,7 +419,8 @@ REVOKE ALL ON nova_imports, source_settlements, nova_records, metric_profiles, l
 - **D5 feat/db/pgvector:** `0004_pgvector.sql` plus a retrieval query `WHERE (merchant_id = $1 OR merchant_id IS NULL) AND is_current ORDER BY embedding <=> $2`.
 - **D6 feat/db/indexes-views:** `0006_views.sql` (with `labelled_rows`). Run EXPLAIN ANALYZE on loader queries (gateway by settlement_id, bank by utr, refunds by gateway_payment_id) over a 100k-row batch; record in `db/INDEXES.md`.
 - **D8 feat/db/nova:** Create `0007_nova.sql` and the grants in `0009`. Prove: a `nova` batch can be inserted, an invalid source is rejected, Down removes everything, and `api_app` cannot DELETE from `nova_records`.
-- **D9 feat/db/lab:** Create `0008_lab.sql`. Prove a comparison row cannot reference a profile of another merchant (add a test with two merchants).
+- **D9 feat/db/lab:** Create `0008_lab.sql`. Prove a comparison row cannot reference a profile of another merchant (add a test with two merchants: inserting a `lab_comparisons` row for merchant A that points at merchant B's profile must fail on the composite foreign key).
+- **D10 feat/db/razorpay (Phase 2):** Create `0010_razorpay.sql` and `0011_grants_razorpay.sql` exactly as in Doc 11 section 7. Prove: a `razorpay` batch inserts and an invalid source fails; `api_app` cannot DELETE `razorpay_records`; `ai_service` cannot read any `razorpay_*` table; a duplicate `event_id` is rejected; Down then Up is clean.
 - **D7 feat/db/seed-scripts:** `db/seed/seed.ts` (refuses in production): two demo merchants, admin and reviewer each (bcrypt from `DEMO_PASSWORD`), config v1 including `nova` and `lab` sections (Data Guide section 10), one global policy per exception category, prompt templates v1. `db/reset.sh` drops, migrates, seeds. Seeds contain **no Nova data and no API key.**
 
 ## 8. Acceptance tests (psql)
@@ -420,9 +436,11 @@ REVOKE ALL ON nova_imports, source_settlements, nova_records, metric_profiles, l
 | Nova source | Insert batch with `source='nova'` | Succeeds; `source='x'` fails |
 | Benchmark on Nova | `v_run_benchmark` for a Nova run | `labelled_rows = 0` |
 | Index coverage | EXPLAIN loader and queue queries at 100k rows | Index scans on big tables |
+| Lab tenant safety (v3) | Insert a comparison for merchant A referencing merchant B's profile | Foreign key violation |
+| Razorpay source (Phase 2) | Insert batch with `source='razorpay'`; as `ai_service` select from `razorpay_records` | Succeeds; permission denied |
 
 ## 9. Completion checklist
-- [ ] Migrations 0001 to 0009 run on an empty PostgreSQL database and are repeatable; Down migrations work
+- [ ] Migrations 0001 to 0009 (and 0010, 0011 after Phase 2) run on an empty PostgreSQL database and are repeatable; Down migrations work (dev only)
 - [ ] Every ledger table has `merchant_id` and an index starting with it (documented globals excepted)
 - [ ] `audit_log` rejects UPDATE, DELETE, TRUNCATE; `api_app` can only INSERT and SELECT it
 - [ ] `ai_service` cannot read any ledger, Nova or lab table

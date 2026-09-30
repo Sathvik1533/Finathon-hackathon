@@ -1,7 +1,7 @@
-# FIN-11 LedgerSense | Data Guide: Nova API and the Synthetic Engine (v2)
+# FIN-11 LedgerSense | Data Guide: Nova API and the Synthetic Engine (v3)
 
-**Status:** NEW guide in the upgrade. Every other guide points here for data sources.
-**Parent guide:** FIN-11 Project Guide. If this document and the parent disagree, the parent wins, then raise a contract PR.
+**Status:** v3 adds the `razorpay` batch source (Phase 2, section 12) and clarifies the two Nova branches. Every other guide points here for data sources.
+**Parent guide:** FIN-11 Main Guide (`FIN-11_0_Main_Guide_End_to_End.md`). If this document and the parent disagree, the parent wins, then raise a contract PR.
 **Stack (fixed):** Next.js + React (web) | Node.js + Express + TypeScript (api) | FastAPI (ai) | PostgreSQL (RDS, pgvector) | AWS (EC2 + docker-compose, RDS, S3, SSM).
 **Build tool:** Antigravity IDE, one agent per branch, one small task per prompt, each with an acceptance check.
 **Golden rule:** Deterministic first, AI second. Money is integer paise. Nothing hardcoded.
@@ -12,7 +12,7 @@
 
 | Before | Now |
 |---|---|
-| Two batch sources: `simulated`, `upload` | Three: **`nova`**, `simulated`, `upload` |
+| Two batch sources: `simulated`, `upload` | Three: **`nova`**, `simulated`, `upload`; **a fourth, `razorpay`, is added in Phase 2 (section 12)** |
 | Simulator had no link to real-world figures (`reference_metrics` were typed into config) | Simulator is calibrated from **real figures computed from Nova**, using the J.P. Morgan AI Research 7-step method |
 | "Real vs synthetic" panel used placeholder reference numbers | Panel compares metrics computed from a Nova batch with metrics computed from a synthetic batch, by the same functions |
 
@@ -30,6 +30,7 @@ Never write that J.P. Morgan data was acquired, used, or validated against.
 | `simulated` | Seeded generator (this guide, section 8) | Yes, hidden, on every internal row | Full (precision, recall, false approvals, category accuracy) |
 | `nova` | Nova API import (sections 3 to 7) | **No** | "Not available"; show match rate, exception mix, Amount at Risk only |
 | `upload` | CSV or JSON via presigned S3 upload | No | "Not available" |
+| `razorpay` (Phase 2) | Razorpay API import, Basic Auth, test mode first (Razorpay Guide, Doc 11) | **No** | "Not available"; same rules as Nova |
 
 The engine is identical for all three and never reads `ground_truth`. Do not claim accuracy on a Nova batch. Say "exception rate observed", not "accuracy".
 
@@ -96,14 +97,14 @@ Rules:
 5. **Fill the `verify` cells** in section 4 and commit `nova-mapping.json`.
 6. **Freeze** the mapping at hour 2 with the contract. Changes after that need a contract PR.
 
-**Antigravity prompt N1 (branch `feat/be/nova-client`, paste after the backend preface)**
+**Antigravity prompt N1 (branch `feat/be/nova-client`, paste after the backend preface).** Note: this branch holds only the client, the discovery script and the mapping file. The importer, endpoints and SSE (module B12) live on a different branch, `feat/be/nova`, built after this one is merged.
 > Create `api/src/services/nova/NovaClient.ts` and `api/scripts/nova-discover.ts`. NovaClient: base URL and key from env, GET only, Authorization Bearer, limiter at 100 requests per minute, honor Retry-After on 429, exponential backoff 1s/2s/4s (max 3) on 502, no retry on 400/401/404/405, errors surfaced as `NovaError{status, code, requestId}`, `listAll(path, params)` with limit=200 and sequential offset paging. The key must never appear in logs or errors. The discover script fetches limit=3 from every resource in `config/nova-mapping.json` and writes field names and types to `docs/nova-discovery.md`. Unit tests use a fixture HTTP server, never the real API.
 
 ---
 
 ## 6. Step by step: the Nova import pipeline (backend module B12 implements this)
 
-An admin clicks **Import from Nova** (screen S16). The API does:
+An admin clicks **Import from Nova** (screen S16). This pipeline is module B12 on branch `feat/be/nova`. The API does:
 
 1. **Preflight.** `GET /health`, `GET /me`. Store `team_slot`, `dataset_slice`. Stop with a clear error if 401 (check `www`, then whitespace in the key).
 2. **Create** a `nova_imports` row (`queued`) and return `importId`. Progress is streamed over SSE (same emitter pattern as runs).
@@ -207,3 +208,20 @@ The old `reference_metrics` block becomes a fallback used only when no Nova `rea
 - Assefa, S., Dervovic, D., Mahfouz, M., Tillman, R., Reddy, P., Balch, T., Veloso, M. *Generating Synthetic Data in Finance: Opportunities, challenges and pitfalls.* ICAIF 2020 (also NeurIPS 2019 Workshop on AI in Financial Services). Process page: jpmorganchase.com/about/technology/research/ai/synthetic-data
 - Nova API Reference v1 (Aczen), read-only accounting data.
 - LedgerLens (github.com/Sathvik1533/LedgerLens): prior work by the same author; credit it as the origin of the deterministic-first design, four-source pipeline, eight exception categories and optimistic-concurrency review flow.
+- Razorpay API documentation (authentication, settlements, settlement recon): razorpay.com/docs/api (Phase 2).
+
+---
+
+## 12. Phase 2: Razorpay as a fourth source (starts after the end-to-end gate)
+
+| Item | Rule |
+|---|---|
+| Source value | `batches.source = 'razorpay'`; `ground_truth` null; benchmark "not available"; say "exception rate observed" |
+| Authentication | Basic Auth, Key ID and Key Secret, server-side in the api service only; test mode first; `rzp_live_` keys refused unless `RAZORPAY_ALLOW_LIVE=true` |
+| Mapping | `api/config/razorpay-mapping.json`, frozen after the Razorpay discovery step (Doc 11, prompt R3). Orders, payments, refunds, settlements and settlement recon map to `internal_txns`, `gateway_txns`, `refunds`, `source_settlements` |
+| Bank credits | Razorpay does not provide the merchant's bank statement: they come from an uploaded bank CSV or a Nova import (decision D-R1) |
+| Money | Razorpay amounts are integers in paise; validate as integers; no float conversion needed |
+| Engine | Unchanged, identical for all four sources; never reads `ground_truth` |
+| Metrics | The metric catalogue (8.1) can profile a `razorpay` batch as a `real` profile in a later iteration; not required for Phase 2 |
+
+Full specification: `FIN-11_11_Razorpay_Integration_Guide.md`.

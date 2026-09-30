@@ -1,8 +1,11 @@
-# FIN-11 LedgerSense | MVP Completion Checklist (v2)
+# FIN-11 LedgerSense | MVP Completion Checklist (v3)
 
-**Parent guide:** FIN-11 Project Guide. If they disagree, the parent wins, then raise a contract PR.
+**Parent guide:** FIN-11 Main Guide (`FIN-11_0_Main_Guide_End_to_End.md`). If they disagree, the parent wins, then raise a contract PR.
 **Stack:** Next.js + React | Node.js + Express + TypeScript | FastAPI | PostgreSQL | AWS. Built in Antigravity IDE, one agent per branch.
 **How to use:** each item is pass or fail with evidence (test output, curl result, screenshot). Tick every box before the code freeze (hour 34) and again on the live AWS URL.
+
+## What changed in v3
+Adds **Phase 2 (Razorpay)** as section 12, security items 23 to 25, demo step 12 and gate G-E2E. Adds the repo and branch checks in section 2. The MVP definition below is unchanged; Phase 2 starts only when Gate G-E2E is green.
 
 ## 0. MVP definition
 The MVP is done when: a reviewer can log in; an admin **imports real accounting data from Nova** or a reviewer clicks Refresh with chosen simulator parameters; the run is watched live; the Amount-at-Risk queue is worked; a case opens with a four-source timeline and AI explanation; a decision is recorded and audited; a version conflict returns 409; an admin changes the fee percent and Refresh visibly moves the numbers; **the Synthetic Lab compares Nova metrics with calibrated synthetic metrics using the J.P. Morgan 7-step method**; and the benchmark on simulated data shows 0 false approvals.
@@ -11,6 +14,7 @@ The MVP is done when: a reviewer can log in; an admin **imports real accounting 
 |---|---|---|
 | **Must** | Deterministic engine, audit trail, human decision step, ground-truth benchmark (simulated), auth and tenant isolation, SSE run progress, config-driven rules, Refresh, **Nova import (read-only)**, **JPM-method synthetic generator with metric comparison**, AI explanation with policy citation or `no policy found`, security checklist, AWS deployment | Never cut |
 | Should | Lab AI narrative, run brief, RAG mini evaluation (15 questions), per-case conversation memory, transactions/settlements/refunds screens, reports export, calibration selector in simulator | Cut late |
+| **Must after G-E2E (Phase 2)** | **Razorpay test-mode import, verified webhook, S16 Razorpay tab** (Doc 11) | Starts only after the gate; first item cut if the gate is missed |
 | Stretch | Nova weak-label agreement metric, narration reference suggestions (F7), semantic match suggestions, MCP server, live webhook demo, admin users screen | Cut first |
 
 ## 1. Problem statement traceability (nothing in the brief is left out)
@@ -43,7 +47,7 @@ Project setup is finished only when every item is ticked.
 7. [ ] gitleaks pre-commit hook and CI job active, **with the custom `nova_sk_` rule**. Owner: Antigravity
 8. [ ] `docker compose up` starts web, api, ai and PostgreSQL (pgvector); `/health` passes on all three. Owner: Antigravity
 9. [ ] PostgreSQL is the only database: `grep -ri mongo` over the repo returns nothing. Owner: Anyone
-10. [ ] `develop` and protected `main` exist; PR template and branch naming documented. Owner: Lead
+10. [ ] `develop` and protected `main` exist on https://github.com/Sathvik1533/Finathon-hackathon.git; collaborators invited with write access; CODEOWNERS and PR template committed; branch naming follows Doc 10. Owner: Lead
 11. [ ] Six tracks assigned (Frontend, Backend, Database, AI, Infra, plus Lead/presenter); each owner has their guide open in Antigravity. Owner: Lead
 12. [ ] Groq key obtained and stored only in `ai/.env` (local) and later SSM. Owner: AI owner
 
@@ -133,6 +137,9 @@ Project setup is finished only when every item is ticked.
 - [ ] 20 Tested logged out (401), wrong role (403), other tenant (404), FastAPI without key (401)
 - [ ] 21 **`grep -r nova_sk_` over repo, images and logs returns nothing**
 - [ ] 22 **Nova is only ever called with GET from the api container; no Nova traffic from web or ai**
+- [ ] 23 **Phase 2: Razorpay key secret only in `RAZORPAY_KEY_SECRET` on the api service; `rzp_live_` refused without `RAZORPAY_ALLOW_LIVE`; header is exactly `Basic <base64>`; no Razorpay traffic from web or ai**
+- [ ] 24 **Phase 2: webhook verifies HMAC on the raw body with a secret different from the API key secret; timing-safe compare; bad or missing signature gives 401; duplicates ignored**
+- [ ] 25 **Phase 2: `grep -r "rzp_"` and the secret-assignment pattern over repo, images and logs return only placeholders**
 
 ## 9. Deployment on AWS
 - [ ] IAM with MFA; budget alert
@@ -161,6 +168,8 @@ Project setup is finished only when every item is ticked.
 10. [ ] Prompt-injection narration has no effect — Presenter
 11. [ ] Backup screen recording saved; README credits LedgerLens, cites Assefa et al. (ICAIF 2020) for the method, states the data honesty sentence; demo script written — Claude / team
 
+12. [ ] **Phase 2:** Razorpay tab in TEST mode: import, run, one webhook with a bad signature rejected and one valid event recorded — Presenter
+
 ## 11. Milestone gates and cut order
 
 | Hour | Gate | Must be true |
@@ -172,6 +181,21 @@ Project setup is finished only when every item is ticked.
 | 31 | AI | AI proxy integrated; audit stores the AI suggestion; lab comparison stored |
 | 34 | Freeze | Only bug and security fixes after this |
 | 35 | Release | Tag, deploy from main, smoke test, Nova import on the public URL |
+| **G-E2E** | **End-to-end gate** | Demo steps 1 to 10 pass on `develop`, CI green, `grep -r nova_sk_` empty, tag `v0.9-e2e`. **Phase 2 (Razorpay) may start only now** |
 
-**If you fall behind, cut in this order:** MCP server, semantic match suggestions, narration suggestions (F7), Nova weak-label agreement, RAG evaluation, conversation memory, live webhook demo, admin users screen, lab AI narrative.
+**If you fall behind, cut in this order:** Razorpay webhook live demo, Razorpay import (Phase 2 as a whole), MCP server, semantic match suggestions, narration suggestions (F7), Nova weak-label agreement, RAG evaluation, conversation memory, live webhook demo, admin users screen, lab AI narrative.
 **Never cut:** the deterministic engine, the audit trail, the human decision step, the ground-truth benchmark, the Nova import, and the metric comparison against Nova.
+
+## 12. Phase 2: Razorpay (starts after Gate G-E2E)
+
+- [ ] Gate G-E2E evidence pasted in the tracking issue; tag `v0.9-e2e` exists
+- [ ] Decisions D-R1 to D-R4 answered in writing by the Lead (Doc 11 section 13)
+- [ ] `feat/contracts/razorpay` merged; Prism mock updated
+- [ ] Migrations 0010 and 0011 merged; `razorpay` batch source accepted; `ai_service` cannot read `razorpay_*`; `api_app` cannot DELETE `razorpay_records`
+- [ ] `RazorpayClient`: exact Basic header, test/live gate, limiter, 429/5xx handling, redaction test; `docs/razorpay-discovery.md` committed; `razorpay-mapping.json` frozen
+- [ ] Import produces a `razorpay` batch with derived `as_of`, `ground_truth` null; empty-settlement case handled honestly
+- [ ] Webhook: raw body, timing-safe HMAC, dedupe, record-only; five tests pass
+- [ ] S16 Razorpay tab: TEST banner, key ID prefix only, reviewer read-only
+- [ ] SSM parameters (api path only), gitleaks rules, smoke tests, egress check
+- [ ] Run brief for a Razorpay batch states the source and makes no accuracy claim
+- [ ] Demo step 12 rehearsed; README updated with the Razorpay section and no accuracy claims

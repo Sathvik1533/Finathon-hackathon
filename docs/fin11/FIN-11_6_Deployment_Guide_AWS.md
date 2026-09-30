@@ -1,8 +1,14 @@
-# FIN-11 LedgerSense | Deployment Guide, AWS (v2)
+# FIN-11 LedgerSense | Deployment Guide, AWS (v3)
 
-**Parent guide:** FIN-11 Project Guide. If they disagree, the parent wins, then raise a contract PR.
+**Parent guide:** FIN-11 Main Guide (`FIN-11_0_Main_Guide_End_to_End.md`). If they disagree, the parent wins, then raise a contract PR.
 **Track:** DevOps / AWS. Owns `/infra` and `/.github`. Branch prefix `feat/infra/*`. Deploy only from `main` after the hour-34 code freeze.
 **Stack deployed:** Next.js (web), Express (api), FastAPI (ai), PostgreSQL on RDS, S3, SSM/Secrets Manager, Caddy, CloudWatch.
+
+## What changed in v3
+1. **Razorpay (Phase 2):** `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_BASE_URL`, `RAZORPAY_WEBHOOK_SECRET` under `/fin11/prod/api/` only; egress to `api.razorpay.com` verified; gitleaks rules for Razorpay; smoke tests for the status and webhook routes; webhook registered in the Razorpay Dashboard against the public HTTPS URL. Branch `feat/infra/razorpay`; details in Doc 11 section 10.
+2. **Smoke test fix:** the API now serves `/api/health` (Backend Guide B1), which the proxy exposes; `/health` stays for the container healthcheck.
+3. Retention script extended to Razorpay records (`purge-provider-records.sh`).
+4. Branch list and order: Doc 10.
 
 ## What changed in v2
 1. **Nova:** `NOVA_API_KEY` and `NOVA_BASE_URL` live in SSM under `/fin11/prod/api/`; egress to `www.aczen.in` is verified from the box; CI never uses the real key; a gitleaks rule detects `nova_sk_` tokens; smoke test checks Nova connectivity (admin only step).
@@ -33,6 +39,8 @@ Internet -> 443 -> Caddy proxy (EC2)
    +--> SSM / Secrets Manager (EC2 instance role, path /fin11/prod/)
    +--> CloudWatch (logs, alarms)
    +--> outbound HTTPS to www.aczen.in (Nova API, read-only), from the api container only
+   +--> outbound HTTPS to api.razorpay.com (Phase 2, read-only, Basic Auth), from the api container only
+   <--- inbound POST /api/webhooks/razorpay (Phase 2), authenticated by HMAC signature
 ```
 Option A (recommended for 36 hours): one EC2 instance with docker-compose, RDS in private subnets. Option B (ECS Fargate behind an ALB) is cleaner but slower; choose it only if the team already knows it.
 
@@ -45,9 +53,10 @@ Option A (recommended for 36 hours): one EC2 instance with docker-compose, RDS i
 | 3 | Create RDS PostgreSQL | You (console) | Not public, private subnet group, encryption on, backups on. Confirm engine version supports pgvector; run `CREATE EXTENSION vector` as master **now**. Run `bootstrap.sql` |
 | 4 | Create the S3 bucket | You (console) | Block all public access, default encryption, CORS PUT from your domain only. Instance role limited to this bucket |
 | 5 | **Create the Nova production key** | **You (Nova portal)** | Sign in at `https://www.aczen.in/nova-api` with the allowlisted email, create a key named `fin11-prod`. Only one key is active per account: if you use the same account for development, decide who rotates. Copy it once |
-| 6 | Store secrets | You (console) | SSM SecureString under `/fin11/prod/<service>/`: `api/DATABASE_URL` (api_app), `api/JWT_SECRET`, `api/INTERNAL_KEY`, **`api/NOVA_API_KEY`**, `api/NOVA_BASE_URL` (`https://www.aczen.in/nova-api/v1`), `api/RAZORPAY_WEBHOOK_SECRET`; `ai/DATABASE_URL` (ai_service), `ai/INTERNAL_KEY`, `ai/GROQ_API_KEY`. The instance role reads only this path. **The `ai` path must not contain any Nova parameter** |
+| 6 | Store secrets | You (console) | SSM SecureString under `/fin11/prod/<service>/`: `api/DATABASE_URL` (api_app), `api/JWT_SECRET`, `api/INTERNAL_KEY`, **`api/NOVA_API_KEY`**, `api/NOVA_BASE_URL` (`https://www.aczen.in/nova-api/v1`), `api/RAZORPAY_WEBHOOK_SECRET`, **Phase 2: `api/RAZORPAY_KEY_ID`, `api/RAZORPAY_KEY_SECRET`, `api/RAZORPAY_BASE_URL`**; `ai/DATABASE_URL` (ai_service), `ai/INTERNAL_KEY`, `ai/GROQ_API_KEY`. The instance role reads only this path. **The `ai` path must not contain any Nova or Razorpay parameter** |
 | 7 | Launch EC2 | You (console) | Ubuntu LTS, attach the instance role, install Docker and the compose plugin. Prefer 2 GB or more RAM and add swap (three app containers plus the embedding model). Build images in CI, never on the box |
 | 8 | **Verify Nova reachability from the box** | You | Over SSM Session Manager: `curl -fsS https://www.aczen.in/nova-api/v1/health` must return `{"status":"ok"}`. If it fails, check DNS, outbound rules, and that the URL contains `www` |
+| 8b | **Phase 2: verify Razorpay reachability and register the webhook** | You | From the box: `curl -sS -o /dev/null -w '%{http_code}' https://api.razorpay.com/v1/` returns an HTTP status. In the Razorpay Dashboard (Test mode) create the webhook `https://<domain>/api/webhooks/razorpay` with a secret different from the API key secret, and store it in SSM |
 | 9 | Domain and HTTPS | You then Antigravity | A record to an Elastic IP; Caddy obtains a Let's Encrypt certificate once 80 and 443 are reachable |
 | 10 | Images to ECR | Antigravity (CI) | Workflow builds web, api, ai and pushes tags equal to the git commit SHA |
 | 11 | Run migrations | Antigravity (script) | Release step: pre-migration RDS snapshot, then `migrate up` with migrator credentials (migrations 0001 to 0009), then set role passwords from secrets |
@@ -55,7 +64,7 @@ Option A (recommended for 36 hours): one EC2 instance with docker-compose, RDS i
 | 13 | Verify | You | Smoke test, security checklist item 20 against the public URL, then the full demo flow once **including a Nova import** |
 | 14 | Observe | Antigravity | Container logs to CloudWatch; alarm on failed health checks; confirm RDS backups; **metric filter alarm if logs ever contain `nova_sk_`** |
 | 15 | Rollback plan | Runbook | Keep the previous image tag; redeploy it. Undo a migration by restoring the pre-migration snapshot |
-| 16 | Clean up | You | After the demo: stop or terminate EC2, delete RDS (final snapshot if wanted), empty and delete the S3 bucket, delete ECR images, **revoke the `fin11-prod` Nova key** |
+| 16 | Clean up | You | After the demo: stop or terminate EC2, delete RDS (final snapshot if wanted), empty and delete the S3 bucket, delete ECR images, **revoke the `fin11-prod` Nova key; Phase 2: regenerate or deactivate the Razorpay test keys, delete the Dashboard webhook** |
 
 ## 4. Files Antigravity should produce
 
@@ -159,6 +168,8 @@ B="$1"
 curl -fsS "$B/api/health"                                                        # api up
 test "$(curl -s -o /dev/null -w '%{http_code}' "$B/api/exceptions")" = 401       # logged out
 test "$(curl -s -o /dev/null -w '%{http_code}' "$B/api/nova/status")" = 401      # Nova status needs auth
+test "$(curl -s -o /dev/null -w '%{http_code}' "$B/api/razorpay/status")" = 401  # Phase 2: Razorpay status needs auth
+test "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'X-Razorpay-Signature: bad' -d '{}' "$B/api/webhooks/razorpay")" = 401   # Phase 2: bad signature rejected
 test "$(curl -s -o /dev/null -w '%{http_code}' "$B/ai/health")" = 404            # ai not public
 test "$(curl -s -o /dev/null -w '%{http_code}' "$B/docs")" = 404                 # no /docs in prod
 # manual next: login as admin, GET /api/nova/status shows reachable:true, run an import, watch SSE
@@ -170,8 +181,16 @@ test "$(curl -s -o /dev/null -w '%{http_code}' "$B/docs")" = 404                
 id = "nova-api-key"
 description = "Nova API key"
 regex = '''nova_sk_[A-Za-z0-9_\-]{43}'''
+[[rules]]
+id = "razorpay-key-id"
+description = "Razorpay key id (Phase 2)"
+regex = '''rzp_(test|live)_[A-Za-z0-9]{10,}'''
+[[rules]]
+id = "razorpay-secret-assignment"
+description = "Razorpay key or webhook secret assigned in a file (heuristic; the secret has no fixed prefix)"
+regex = '''RAZORPAY_(KEY_SECRET|WEBHOOK_SECRET)\s*[=:]\s*['"]?[A-Za-z0-9_\-]{16,}'''
 [allowlist]
-regexes = ['''nova_sk_REPLACE_ME''']
+regexes = ['''nova_sk_REPLACE_ME''', '''rzp_test_REPLACE_ME''', '''RAZORPAY_KEY_SECRET=REPLACE_ME''', '''RAZORPAY_WEBHOOK_SECRET=REPLACE_ME''']
 ```
 
 ### CI (pull requests) and deploy (main only)
@@ -217,15 +236,15 @@ jobs:
       - run: ./infra/scripts/build-push.sh ${{ github.sha }}
       - run: ./infra/scripts/deploy.sh ${{ github.sha }}     # SSM Run Command on the EC2 box
 ```
-**The real Nova key is never a GitHub secret.** It exists only in SSM.
+**The real Nova key and the Razorpay key and webhook secrets are never GitHub secrets.** They exist only in SSM.
 
 ## 5. Environment variables per service
 
 | Service | Variables (values from SSM or Secrets Manager; never git, never images) |
 |---|---|
 | web | `NEXT_PUBLIC_API_BASE_URL=/api` (public value only) |
-| api | `NODE_ENV=production`, `PORT`, `DATABASE_URL` (api_app), `JWT_SECRET`, `JWT_TTL_SECONDS`, `COOKIE_DOMAIN`, `CORS_ORIGIN`, `INTERNAL_KEY`, `AI_SERVICE_URL=http://ai:8000`, `AI_TIMEOUT_MS`, `S3_BUCKET`, `AWS_REGION`, `UPLOAD_MAX_BYTES`, **`NOVA_API_KEY`, `NOVA_BASE_URL`**, `RAZORPAY_WEBHOOK_SECRET` |
-| ai | `ENV=production`, `DATABASE_URL` (ai_service), `INTERNAL_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`, fallback provider settings, `EMBEDDING_MODEL` |
+| api | `NODE_ENV=production`, `PORT`, `DATABASE_URL` (api_app), `JWT_SECRET`, `JWT_TTL_SECONDS`, `COOKIE_DOMAIN`, `CORS_ORIGIN`, `INTERNAL_KEY`, `AI_SERVICE_URL=http://ai:8000`, `AI_TIMEOUT_MS`, `S3_BUCKET`, `AWS_REGION`, `UPLOAD_MAX_BYTES`, **`NOVA_API_KEY`, `NOVA_BASE_URL`**, `RAZORPAY_WEBHOOK_SECRET`, **Phase 2: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_BASE_URL`** (`RAZORPAY_ALLOW_LIVE` stays unset) |
+| ai | `ENV=production`, `DATABASE_URL` (ai_service), `INTERNAL_KEY`, `GROQ_API_KEY`, `GROQ_MODEL`, fallback provider settings, `EMBEDDING_MODEL` (no Nova, no Razorpay) |
 | migrate (release only) | `DATABASE_URL` (migrator role) |
 
 ## 6. Branch prompts (paste after the shared preface)
@@ -233,6 +252,8 @@ jobs:
 - **feat/infra/ci:** Create `ci.yml` (gitleaks with the custom Nova rule, lint and unit tests for api and web with `NODE_ENV=test`, migrations against a throwaway `pgvector/pgvector:pg16` service, pytest for ai) and `deploy.yml` (main only, OIDC, images tagged by commit SHA, deploy script). No AWS or Nova keys in the repo. Pin action versions.
 - **feat/infra/aws-base:** Write `infra/aws/README.md` and idempotent AWS CLI scripts for security groups, private encrypted RDS, private S3 with CORS for presigned PUT, instance role limited to the `/fin11/prod/` path and the bucket, ECR repositories. Do not print or commit secrets. List every manual console step separately, including creating the Nova key and storing it in SSM.
 - **feat/infra/aws-deploy:** Write `infra/scripts`: `load-secrets.sh`, `release-on-box.sh` (snapshot, pull, migrate profile, up, smoke test, rollback to previous tag), `smoke-test.sh`, the Caddyfile with `flush_interval -1` and `/ai/*` 404, and `infra/ROLLBACK.md`.
+- **feat/infra/scaffold (Wave 0):** Create the monorepo folders `/web /api /ai /db /infra /contracts /.github`, `.gitignore` covering every `.env*` except `.env.example`, one `.env.example` per service with dummy values, the gitleaks pre-commit hook, `.github/CODEOWNERS` and the PR template from the Git and Branching Guide, and a compose skeleton. Acceptance: `git status` after `cp .env.example .env` shows the `.env` untracked-and-ignored; gitleaks passes.
+- **feat/infra/razorpay (Phase 2):** Add the Razorpay SSM parameters (api path only), the two gitleaks rules, the two smoke-test lines, the egress check from the box, and extend the purge script to `purge-provider-records.sh` covering `nova_records` and `razorpay_records`/old webhook events (as `migrator`, prints the row count, requires `--yes`). Acceptance: `grep -r 'rzp_' infra/ .github/` finds only allow-listed placeholders; smoke test passes.
 - **feat/infra/retention:** Write `infra/scripts/purge-nova-records.sh` that, running as `migrator`, deletes `nova_records` older than N days (default 30, argument) after printing the row count and asking for `--yes`. Document that it is manual.
 
 ## 7. Release, verification and rollback
@@ -247,6 +268,7 @@ jobs:
 - pgvector on RDS needs a supported engine version: test `CREATE EXTENSION vector` early.
 - Small instances run out of memory building images: build in CI.
 - **Nova: the apex domain `aczen.in` redirects and clients drop the Authorization header (401). Always use `www`.**
+- **Razorpay (Phase 2): the header must be exactly `Basic <base64>`; the webhook body must reach Express untouched (raw), otherwise signature verification fails; a live key must never be loaded unless the Lead sets `RAZORPAY_ALLOW_LIVE`.**
 - **Nova allows 120 requests per minute per key; a second import started while another is running doubles the load. The API allows one active import per merchant.**
 - Free-tier limits and pricing differ by account and change; confirm in your billing console and set the budget alert first.
 
@@ -256,6 +278,7 @@ jobs:
 - [ ] S3 private, public access blocked, presigned upload tested from the browser (You)
 - [ ] All secrets in SSM or Secrets Manager; none in git, images, logs or workflow files (You)
 - [ ] **`NOVA_API_KEY` exists only under `/fin11/prod/api/`; `curl` to Nova `/health` works from the box (You)**
+- [ ] Phase 2: Razorpay keys and webhook secret only under `/fin11/prod/api/`; `api.razorpay.com` reachable from the box; webhook registered and a signed test event accepted (You)
 - [ ] Security groups: DB reachable only from the app group; ai container not published (You)
 - [ ] HTTPS works; HTTP redirects to HTTPS; certificate valid (You)
 - [ ] CI green: lint, tests, migrations 0001 to 0009 on throwaway Postgres, gitleaks including the Nova rule (Antigravity)

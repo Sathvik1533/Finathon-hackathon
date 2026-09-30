@@ -1,8 +1,15 @@
-# FIN-11 LedgerSense | Backend Guide (v2)
+# FIN-11 LedgerSense | Backend Guide (v3)
 
-**Parent guide:** FIN-11 Project Guide. If they disagree, the parent wins, then raise a contract PR.
+**Parent guide:** FIN-11 Main Guide (`FIN-11_0_Main_Guide_End_to_End.md`). If they disagree, the parent wins, then raise a contract PR.
 **Track:** Backend. Owns `/api`. Branch prefix `feat/be/*`. Stack: Node 20, Express, TypeScript, `pg` (parameterized SQL), Zod, node-pg-migrate client only (migrations belong to the database track).
 **Related:** Data Guide (Nova + synthetic) and Database Guide (0007 to 0009).
+
+## What changed in v3
+1. **B12 is split into two branches:** B12a `feat/be/nova-client` (client, discovery, mapping; Data Guide prompt N1) and B12 `feat/be/nova` (importer, endpoints, SSE). v2 used both names for the same work in different guides.
+2. **B1** serves `GET /health` (container check) and `GET /api/health` (through the proxy) so the smoke test works.
+3. **B14 Razorpay connector and import** (Phase 2, after the end-to-end gate): `RazorpayClient` with Basic Auth, import pipeline, four endpoints, config section `razorpay`, env vars `RAZORPAY_*`. Specified in Doc 11.
+4. **B11 webhook** is now a Must after the gate (raw body, HMAC, dedupe, record-only), branch `feat/be/webhooks`.
+5. The log redactor also masks `rzp_test_...`, `rzp_live_...` tokens and the Basic `Authorization` header.
 
 ## What changed in v2
 1. **B12 Nova connector** (client, import pipeline, status endpoints) and **B13 Synthetic Lab** (profiles, calibrate, compare).
@@ -32,16 +39,18 @@
 | B3 | Config API (versioned) | feat/be/config-api | B2, feat/db/audit-config |
 | B4 | Simulator (seeded, JPM method) | feat/be/simulator | feat/db/schema-core |
 | B5 | Ingestion and upload | feat/be/ingestion | B1 |
-| **B12** | **Nova connector and import** | **feat/be/nova** | **B3, feat/db/nova** |
+| **B12a** | **Nova client and discovery** | **feat/be/nova-client** | **B1** |
+| **B12** | **Nova import and endpoints** | **feat/be/nova** | **B12a, B3, feat/db/nova** |
 | B6 | Reconciliation engine | feat/be/recon-engine | B3, B4 |
 | B7 | Job runner and SSE | feat/be/jobs-sse | B6 |
 | B8 | Cases, decisions, read APIs | feat/be/cases | B7, feat/db/schema-recon |
 | B9 | Metrics and reports | feat/be/metrics-reports | B6 |
 | **B13** | **Synthetic Lab** | **feat/be/lab** | **B4, B9, B12, feat/db/lab** |
 | B10 | AI proxy (Express to FastAPI) | feat/be/ai-proxy | B8 |
-| B11 | Razorpay-style webhook (optional) | feat/be/webhooks | B1 |
+| B11 | Razorpay webhook (Must after G-E2E) | feat/be/webhooks | B1, feat/db/razorpay |
+| **B14** | **Razorpay client and import (Phase 2)** | **feat/be/razorpay-client, feat/be/razorpay-import** | **B3, B12 pattern, feat/db/razorpay** |
 
-Build order: B1, B2 (with DB core) then B3, B4, B5, **B12** in parallel, then B6, B7, B8, B9, **B13**, B10. B11 is cut first if time is short. B12 starts at hour 0 because its discovery step needs the real Nova key.
+Build order: B1, B2 (with DB core) then B3, B4, B5, **B12** in parallel, then B6, B7, B8, B9, **B13**, B10. **B12a starts at hour 0** because its discovery step needs the real Nova key. **B11 and B14 start only after Gate G-E2E** (Main Guide 7.1); B14 is the first thing cut if the gate is missed.
 
 ---
 
@@ -50,9 +59,9 @@ Build order: B1, B2 (with DB core) then B3, B4, B5, **B12** in parallel, then B6
 ### B1. Foundation (feat/be/foundation)
 - Folders `api/src/{routes,middleware,domain,services,models}` plus `api/config/` (JSON config such as `nova-mapping.json`).
 - Middleware: request ID (`X-Request-Id`, echoed in errors and logs), helmet, CORS allowlist from `CORS_ORIGIN`, express-rate-limit, Zod validation helper, JSON body cap.
-- `pg` Pool (size from env), graceful shutdown, `GET /health` with `SELECT 1`.
-- Generic error envelope `{error:{code,message,requestId}}`; stack traces only in server logs; logger never prints secrets, auth bodies, or any `Authorization` header (add a redaction test that sends a `nova_sk_` looking string).
-- **Done when:** thrown error returns the envelope with request ID and no stack in production; `/health` returns 200.
+- `pg` Pool (size from env), graceful shutdown, `GET /health` with `SELECT 1`, **also mounted at `GET /api/health`** (public path through the proxy; used by the smoke test).
+- Generic error envelope `{error:{code,message,requestId}}`; stack traces only in server logs; logger never prints secrets, auth bodies, or any `Authorization` header (add a redaction test that sends a `nova_sk_` looking string **and an `rzp_live_`/`rzp_test_` looking string**).
+- **Done when:** thrown error returns the envelope with request ID and no stack in production; `/health` and `/api/health` return 200.
 - **Prompt:** Create the Express TypeScript foundation in `/api` with request-ID, helmet, CORS allowlist from env, express-rate-limit, Zod validate helper, `pg` Pool with parameterized queries only, `/health` running `SELECT 1`, a generic error handler, and a log redactor that masks `Authorization` headers and any `nova_sk_...` token. No secrets or constants hardcoded.
 
 ### B2. Auth, roles, tenant isolation (feat/be/auth-rbac)
@@ -64,7 +73,7 @@ Build order: B1, B2 (with DB core) then B3, B4, B5, **B12** in parallel, then B6
 
 ### B3. Config API (feat/be/config-api)
 - `GET /api/config` (latest plus versions), `PUT /api/config` (admin) inserts version N+1 with `updated_by` and `change_note`. Never UPDATE.
-- Zod ranges: bps 0 to 10000, tolerance at least 0, date window 0 to 60, stage keys and rounding rule from known lists, **`nova.max_reject_pct` 0 to 100, `nova.rate_limit_per_min` 1 to 110, `lab.tol_*` and `lab.ks_*` between 0 and 1, `lab.max_iterations` 1 to 20.**
+- Zod ranges: bps 0 to 10000, tolerance at least 0, date window 0 to 60, stage keys and rounding rule from known lists, **`nova.max_reject_pct` 0 to 100, `nova.rate_limit_per_min` 1 to 110, `lab.tol_*` and `lab.ks_*` between 0 and 1, `lab.max_iterations` 1 to 20; Phase 2: `razorpay.max_reject_pct` 0 to 100, `razorpay.rate_limit_per_min` 1 to 100, `razorpay.page_size` 1 to 100, `razorpay.default_lookback_days` 1 to 365.**
 - Seed default v1 per merchant (section 6). Runs and imports read the latest version at start and store a snapshot.
 - **Done when:** editing fee bps creates v+1; a later run stores the new snapshot; out-of-range gives 422; reviewer gets 403.
 
@@ -82,8 +91,11 @@ Build order: B1, B2 (with DB core) then B3, B4, B5, **B12** in parallel, then B6
 - `POST /api/uploads/presign` returns a private S3 (MinIO locally) presigned PUT URL under `<merchantId>/`. `POST /api/batches/upload {uploadKey, sourceType}` verifies prefix, size cap, extension (`.csv` or `.json`), parses in memory.
 - Zod row validation per source type. All-or-nothing: any invalid row creates no batch and returns the first 100 errors `{row, field, reason}`. Success creates a batch `source='upload'`, `ground_truth` null. `StorageAdapter` interface (S3 in prod, MinIO in dev).
 
+### B12a. Nova client and discovery (feat/be/nova-client) NEW
+Prompt N1 in the Data Guide (section 5). Delivers `NovaClient`, `FixtureNovaClient`, `nova-discover.ts`, `docs/nova-discovery.md` and the frozen `api/config/nova-mapping.json`. Merge this first.
+
 ### B12. Nova connector and import (feat/be/nova) NEW
-Implements Data Guide sections 3 to 7. Do that guide's step 1 to 6 (onboarding, discovery) before coding the importer.
+Implements Data Guide sections 3 to 7 on top of B12a. Do that guide's step 1 to 6 (onboarding, discovery) before coding the importer.
 
 **Endpoints**
 
@@ -195,8 +207,22 @@ Rules: all computations use the shared metric functions; the comparator is a pur
 - Fallback on timeout, error or invalid output: deterministic explanation with `aiAvailable:false`. Per-user rate limits on AI routes. Reindex sends policy bodies in the request.
 - **Done when:** with FastAPI stopped the case page works; FastAPI without the key returns 401; invalid model output is discarded.
 
-### B11. Razorpay-style webhook (optional)
-`POST /api/webhooks/razorpay` mounted before the JSON parser with `express.raw`; HMAC-SHA256 of the raw body with `RAZORPAY_WEBHOOK_SECRET` compared to `X-Razorpay-Signature` using `crypto.timingSafeEqual`; 401 on mismatch; dedupe by event id. First item cut if time is short.
+### B11. Razorpay webhook (feat/be/webhooks), Must after G-E2E
+`POST /api/webhooks/razorpay` mounted **before** the JSON parser with `express.raw({type:"application/json", limit:"1mb"})`. Authentication is the signature only (no cookie, no CSRF header): HMAC-SHA256 of the raw body with `RAZORPAY_WEBHOOK_SECRET`, hex, compared with `X-Razorpay-Signature`; check lengths first, then `crypto.timingSafeEqual`; 401 and store nothing on mismatch or missing header. After verification: parse, read the event id and type, resolve the merchant from the payload account id via `merchants.razorpay_account_id` (unknown account: reply 200 and drop), insert into `razorpay_webhook_events` with `ON CONFLICT (event_id) DO NOTHING` (duplicates still reply 200). MVP is record-only: no engine run, no ledger writes. Rate limited. Full detail and tests: Doc 11 section 6.
+
+### B14. Razorpay client and import (feat/be/razorpay-client, then feat/be/razorpay-import), Phase 2
+Implements Doc 11 sections 4, 5 and 8. **Authentication:** Basic Auth (`Authorization: Basic base64(key_id:key_secret)`), server-side only, from `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`; test mode by default; a `rzp_live_` key is refused unless `RAZORPAY_ALLOW_LIVE=true`.
+
+| Method and path | Role | Purpose |
+|---|---|---|
+| `GET /api/razorpay/status` | admin | Auth check; returns `{reachable, mode, keyIdPrefix, lastWebhookAt}`; never the secret |
+| `POST /api/razorpay/import` | admin | Body `{from, to, bankSource, bankBatchId, asOfOverride?}`; creates `razorpay_imports`, starts the job, returns `importId` |
+| `GET /api/razorpay/imports` and `/:id` | reviewer, admin | History and detail |
+| `GET /api/razorpay/imports/:id/stream` | reviewer, admin | SSE: `resource`, `page`, `rejects`, `done`, `error` |
+
+Job: preflight, sequential pull (orders, payments, refunds, settlements, recon) saved raw to `razorpay_records`, Zod validate with `.passthrough()`, pure transforms via `razorpay-mapping.json`, copy bank credits from the chosen upload/Nova batch (tenant-checked), derive `as_of`, one transaction, batch `source='razorpay'`, `ground_truth` null. One active import per merchant. Errors map to `502 razorpay_unavailable` with our request ID; never return Razorpay message bodies or any key.
+**Done when:** wrong secret gives 502 with no secret in body or logs; the header is exactly `Basic <base64>`; a fixture import (including an empty-settlements fixture) gives the expected counts; the client never exceeds `perMin`; reviewer starting an import gets 403; the engine code is unchanged.
+**Prompts:** Doc 11 R3 and R4.
 
 ---
 
@@ -232,10 +258,11 @@ Rules: all computations use the shared metric functions; the comparator is a pur
 | POST `/api/ai/explain`, `/ai/policy-chat`, `/ai/brief`, `/ai/lab-narrative` | reviewer, admin | B10 |
 | POST `/api/ai/reindex`, `/ai/eval` | admin | B10 |
 | GET/POST `/api/users` | admin | B8 |
-| POST `/api/webhooks/razorpay` | signature | B11 |
-| GET `/health` | public | B1 |
+| POST `/api/webhooks/razorpay` | signature (HMAC) | B11 |
+| **GET `/api/razorpay/status`; POST `/api/razorpay/import`; GET `/api/razorpay/imports(/:id)`; GET `/api/razorpay/imports/:id/stream`** | **admin (status, import) / reviewer (reads)** | **B14** |
+| GET `/health`, `/api/health` | public | B1 |
 
-Status codes: 200/201 success, 401 not logged in, 403 wrong role or CSRF, 404 not found or other tenant, 409 version conflict, 422 validation, 429 rate limit, **502 `nova_unavailable`** (Nova only; AI failures never leak, the fallback is used), 500 generic.
+Status codes: 200/201 success, 401 not logged in, 403 wrong role or CSRF, 404 not found or other tenant, 409 version conflict, 422 validation, 429 rate limit, **502 `nova_unavailable` / `razorpay_unavailable`** (upstream data providers only; AI failures never leak, the fallback is used), 500 generic.
 
 ## 6. Config v1 (seed; every value read from the snapshot)
 ```json
@@ -254,6 +281,7 @@ Status codes: 200/201 success, 401 not logged in, 403 wrong role or CSRF, 404 no
    "TIMING_LAG":{"severity":"low","basis":"net","weight_bps":2000}},
  "nova": {"max_reject_pct":2,"rate_limit_per_min":100,"as_of_override":null},
  "lab": {"tol_pass":0.10,"tol_warn":0.25,"ks_pass":0.10,"ks_warn":0.20,"max_iterations":5,"amount_model":"empirical_quantiles"},
+ "razorpay": {"max_reject_pct":2,"rate_limit_per_min":60,"page_size":100,"default_lookback_days":30},
  "reference_metrics": {"fee_bps":200,"settlement_lag_days":2,"refund_rate_bps":150}
 }
 ```
@@ -271,9 +299,13 @@ Placeholders only. Add the remaining categories (`AMOUNT_MISMATCH`, `PARTIAL_REF
 | S3_BUCKET, AWS_REGION, UPLOAD_MAX_BYTES | Uploads (MinIO endpoint locally) |
 | **NOVA_API_KEY** | **Nova bearer key (`nova_sk_...`); SSM in production; never in git** |
 | **NOVA_BASE_URL** | **`https://www.aczen.in/nova-api/v1` (with www)** |
-| RAZORPAY_WEBHOOK_SECRET | Webhook verification |
+| **RAZORPAY_KEY_ID** | **Phase 2. `rzp_test_...` (or `rzp_live_...` only with the allow flag). Api service only** |
+| **RAZORPAY_KEY_SECRET** | **Phase 2. Basic Auth password. SSM in production; never in git, logs, web or ai** |
+| RAZORPAY_BASE_URL | Default `https://api.razorpay.com/v1` |
+| RAZORPAY_ALLOW_LIVE | Unset by default; must be `true` to allow a live key |
+| RAZORPAY_WEBHOOK_SECRET | Webhook signature verification (different from the key secret) |
 
-`api/.env.example` holds dummy values only (`NOVA_API_KEY=nova_sk_REPLACE_ME`).
+`api/.env.example` holds dummy values only (`NOVA_API_KEY=nova_sk_REPLACE_ME`, `RAZORPAY_KEY_ID=rzp_test_REPLACE_ME`, `RAZORPAY_KEY_SECRET=REPLACE_ME`).
 
 ## 8. Completion checklist
 - [ ] Every route has auth and role middleware; no cookie gives 401 on all protected routes
@@ -283,6 +315,7 @@ Placeholders only. Add the remaining categories (`AMOUNT_MISMATCH`, `PARTIAL_REF
 - [ ] **`NovaClient`: GET only, www base URL, limiter, 429/502 handling, no retry on 400/401/404/405, key never logged (redaction test)**
 - [ ] **Nova import: fixture import matches expected counts and paise; rejects over threshold fail the import; `as_of` derived and stored**
 - [ ] **Nova key appears only in `NOVA_API_KEY` on the api service (`grep -r nova_sk_` empty in repo and image)**
+- [ ] **Phase 2: `RazorpayClient` sends exactly `Basic <base64>`, blocks live keys without the flag, redaction test passes, import gives a `razorpay` batch, webhook verifies the raw-body HMAC and dedupes, reviewer gets 403 on import**
 - [ ] Simulator: same seed and profile give identical output; requested rates respected
 - [ ] **Lab: profiles, calibrate and compare work; comparator unit tests pass; upload batches refused**
 - [ ] Upload validation returns row-level reasons; only `.csv` and `.json`; size cap enforced

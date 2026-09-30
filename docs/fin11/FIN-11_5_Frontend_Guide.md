@@ -1,8 +1,14 @@
-# FIN-11 LedgerSense | Frontend Guide (v2)
+# FIN-11 LedgerSense | Frontend Guide (v3)
 
-**Parent guide:** FIN-11 Project Guide. If they disagree, the parent wins, then raise a contract PR.
+**Parent guide:** FIN-11 Main Guide (`FIN-11_0_Main_Guide_End_to_End.md`). If they disagree, the parent wins, then raise a contract PR.
 **Track:** Frontend. Owns `/web`. Branch prefix `feat/fe/*`. Stack: Next.js (React, TypeScript), Zod, TanStack Query, recharts, typed client generated from `/contracts/openapi.yaml`.
 **Related:** Data Guide (Nova + synthetic), Backend Guide (endpoints).
+
+## What changed in v3
+1. **S16 gets a second tab, Razorpay** (Phase 2, after the end-to-end gate): status card with TEST/LIVE mode badge and key ID prefix, import dialog with date range and bank-credits source, live SSE progress, history, last-webhook line. Branch `feat/fe/sources-razorpay`. Spec: Razorpay Guide, section 9.
+2. `SourceBadge` supports `razorpay`. Benchmark panel shows "not available" for it.
+3. Contract gap list extended with the `/api/razorpay/*` endpoints.
+4. Full screen-by-screen user view: `FIN-11_8_User_Journey_and_Screens.md`.
 
 ## What changed in v2
 1. **Two new screens:** S16 Data sources (Nova import) and S17 Synthetic Lab (JPM 7-step view).
@@ -35,7 +41,7 @@
 | Mocks (dev only) | Prism mock from the OpenAPI contract until hour 19; **Nova endpoints are mocked by Prism too** (the web app never sees real Nova). Remove every mock before the release tag |
 | Security | CSP in `next.config`, no `dangerouslySetInnerHTML`, no secrets in `NEXT_PUBLIC_*`, same-origin `/api` in production |
 | Accessibility | Keyboard-operable tables and decision panel, visible focus, labels on every input, status by text as well as color |
-| Source badge | Small component `<SourceBadge source>` used on batch lists, run headers, dashboard, case dossier |
+| Source badge | Small component `<SourceBadge source>` (Nova, Simulated, Upload, and Razorpay in Phase 2) used on batch lists, run headers, dashboard, case dossier |
 
 ## 2. Screen map and build order
 
@@ -50,7 +56,7 @@
 |---|---|---|---|---|
 | S1 | App shell and navigation | /app | reviewer, admin | feat/fe/layout |
 | S2 | Login | /login | anyone | feat/fe/auth |
-| **S16** | **Data sources (Nova)** | **/app/sources** | **reviewer (read), admin (import)** | **feat/fe/sources** |
+| **S16** | **Data sources (Nova; Razorpay tab in Phase 2)** | **/app/sources** | **reviewer (read), admin (import)** | **feat/fe/sources, feat/fe/sources-razorpay** |
 | S3 | Batches and simulator | /app/batches | reviewer, admin | feat/fe/batches |
 | S4 | Run console (live SSE) | /app/runs/:id | reviewer, admin | feat/fe/run-console |
 | S5 | Dashboard and Refresh | /app | reviewer, admin | feat/fe/dashboard |
@@ -66,7 +72,7 @@
 | S14 | Admin: policies and prompts | /admin/policies | admin | feat/fe/admin-ai |
 | S15 | Admin: users (optional) | /admin/users | admin | feat/fe/admin-users |
 
-**Contract gap to close at hour 2:** add to `/contracts/openapi.yaml`: `GET /api/batches, /runs, /settlements, /transactions, /refunds, /audit`, `GET/POST /api/users`, `POST /api/uploads/presign`, `POST /api/ai/policy-chat`, **`GET /api/nova/status`, `POST /api/nova/import`, `GET /api/nova/imports(/:id)`, `GET /api/nova/imports/:id/stream`, `POST/GET /api/lab/profiles`, `POST /api/lab/calibrate`, `POST /api/lab/compare`, `GET /api/lab/comparisons`, `POST /api/ai/brief`, `POST /api/ai/lab-narrative`.**
+**Contract gap to close at hour 2:** add to `/contracts/openapi.yaml`: `GET /api/batches, /runs, /settlements, /transactions, /refunds, /audit`, `GET/POST /api/users`, `POST /api/uploads/presign`, `POST /api/ai/policy-chat`, **`GET /api/nova/status`, `POST /api/nova/import`, `GET /api/nova/imports(/:id)`, `GET /api/nova/imports/:id/stream`, `POST/GET /api/lab/profiles`, `POST /api/lab/calibrate`, `POST /api/lab/compare`, `GET /api/lab/comparisons`, `POST /api/ai/brief`, `POST /api/ai/lab-narrative`. Phase 2 (contract PR `feat/contracts/razorpay`): `GET /api/razorpay/status`, `POST /api/razorpay/import`, `GET /api/razorpay/imports(/:id)`, `GET /api/razorpay/imports/:id/stream`.**
 
 ---
 
@@ -93,6 +99,13 @@
 - **States:** no imports yet (empty state with the import button for admin, explanation for reviewer); `nova_unavailable` error shows our request ID; reviewer sees a disabled import button with a tooltip.
 - **Done when:** a fixture-backed import shows live progress and creates a batch tagged `Nova`; a wrong-key error shows a friendly message and no key text anywhere; "Run reconciliation" navigates to the run console.
 - **Prompt:** Build /app/sources: connection card from GET /api/nova/status, admin-only import dialog with optional as-of override (Zod), live progress using useSSE on the import stream, and history table with a Run reconciliation button. Render every server string as plain text. Never display more than the key prefix returned by the API.
+
+#### S16 Phase 2: Razorpay tab (feat/fe/sources-razorpay)
+- **API:** `GET /api/razorpay/status`, `POST /api/razorpay/import`, `GET /api/razorpay/imports(/:id)`, `GET /api/razorpay/imports/:id/stream` (SSE).
+- **Shows:** (1) status card: reachable, mode badge (`TEST` prominent, `LIVE` in a warning style), key ID prefix (12 characters), last webhook time; never a secret. (2) Import dialog (admin): date range (Zod: from not after to, at most 365 days), bank-credits source select listing existing upload or Nova batches, optional as-of override, text "Razorpay is read-only; nothing is written to Razorpay". (3) Live progress with the same `useSSE` hook. (4) History with **Run reconciliation**.
+- **States:** empty; `razorpay_unavailable` shows our request ID and never any key text; reviewer sees the import disabled with a tooltip.
+- **Done when:** with the Prism mock then the real API, an import shows live progress and creates a batch tagged `Razorpay`; the benchmark panel says "not available"; `grep -r rzp_ web/` finds nothing.
+- **Prompt:** Extend /app/sources with a Razorpay tab per Frontend Guide S16 Phase 2: status card with mode badge and key ID prefix, admin-only import dialog (date range and bank-credits source, Zod), live progress via useSSE, history with Run reconciliation. Render every server string as plain text; never display more than the key ID prefix returned by the API.
 
 ### S3. Batches and simulator (feat/fe/batches)
 - **API:** `POST /api/batches/simulate`, `POST /api/uploads/presign`, `POST /api/batches/upload`, `GET /api/batches`, **`GET /api/lab/profiles`**.
@@ -157,6 +170,7 @@
 | 10-19 | **S16 sources**, S3, S4 (SSE hook), S5, still on mocks where backend is not merged | Hour 19: switch from mocks to the real API |
 | 20-25 | S6 to S12, **S17 lab**, S13 to S15; polish states and accessibility | Hour 25: all main screens read live data |
 | 25-34 | AI panel (S9) through the Express proxy; bug fixes; security pass (CSP, no innerHTML, no tokens in storage) | Hour 34: code freeze |
+| After G-E2E | **Phase 2:** Razorpay tab on S16 (mock first, then real API), `Razorpay` source badge | Doc 11 acceptance |
 
 ## 5. Completion checklist
 - [ ] All 17 screens exist at their routes and are reachable by the right roles only
@@ -166,7 +180,8 @@
 - [ ] Forms validate with Zod; server 422 errors appear inline
 - [ ] Login: generic error, 429 message, session survives refresh, no token in browser storage
 - [ ] **S16: import progress arrives over SSE; only the key prefix is ever displayed; reviewer cannot start an import**
-- [ ] **Source badge appears on batches, runs, dashboard and case dossier; benchmark shows "not available" for Nova and upload batches**
+- [ ] **Source badge appears on batches, runs, dashboard and case dossier; benchmark shows "not available" for Nova, upload and Razorpay batches**
+- [ ] Phase 2: Razorpay tab shows the TEST/LIVE badge and key ID prefix only; reviewer cannot import; `grep -r rzp_ web/` is empty
 - [ ] **S17: seven steps, comparison table with text verdicts, iteration cap, AI explanation with fallback**
 - [ ] Run console updates only from SSE events; reconnect works
 - [ ] Case dossier: four-source timeline, fee breakdown, AI panel states, decision with version, 409 dialog

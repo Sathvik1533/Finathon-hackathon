@@ -13,7 +13,10 @@ export const DashboardPage: React.FC = () => {
   const { run, loading, error, trigger, loadLatest } = useReconcile();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [filterPeriod, setFilterPeriod] = useState<'Monthly' | 'Annually'>('Annually');
+  const [filterPeriod, setFilterPeriod] = useState<'Monthly' | 'Annually'>('Monthly');
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [selectedRange, setSelectedRange] = useState('29 Sep, 2026 – 01 Oct, 2026');
+  const [hoveredBar, setHoveredBar] = useState<string | null>(null);
 
   useEffect(() => {
     loadLatest();
@@ -37,6 +40,30 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  const CALENDAR_PRESETS = [
+    { label: 'Today (01 Oct)', range: '01 Oct, 2026' },
+    { label: 'Yesterday (30 Sep)', range: '30 Sep, 2026' },
+    { label: 'Last 7 Days', range: '24 Sep – 01 Oct, 2026' },
+    { label: 'This Month', range: '01 Sep – 30 Sep, 2026' },
+    { label: 'All Cycles (2026)', range: '01 Jan – 01 Oct, 2026' },
+  ];
+
+  const MONTHLY_BARS = [
+    { id: 'jan', label: 'Jan', height: '48%', volume: '₹24,500.00', orders: 112, match: '99.7%' },
+    { id: 'feb', label: 'Feb', height: '62%', volume: '₹31,200.00', orders: 148, match: '99.9%' },
+    { id: 'mar', label: 'Mar', height: '38%', volume: '₹19,800.00', orders: 94,  match: '99.5%' },
+    { id: 'apr', label: 'Apr', height: '78%', volume: '₹39,500.00', orders: 185, match: '100%' },
+    { id: 'may', label: 'May', height: '56%', volume: '₹28,400.00', orders: 130, match: '99.8%' },
+    { id: 'jun', label: 'Jun (Peak)', height: '94%', volume: run ? paise(run.totalSettledPaise) : '₹48,702.00', orders: 204, match: '99.98%', isPeak: true },
+  ];
+
+  const ANNUALLY_BARS = [
+    { id: 'y2023', label: '2023', height: '36%', volume: '₹2,400,000.00', orders: '12.4k', match: '99.4%' },
+    { id: 'y2024', label: '2024', height: '58%', volume: '₹4,800,000.00', orders: '24.1k', match: '99.7%' },
+    { id: 'y2025', label: '2025', height: '76%', volume: '₹7,200,000.00', orders: '38.6k', match: '99.9%' },
+    { id: 'y2026', label: '2026 (YTD)', height: '95%', volume: '₹9,600,000.00', orders: '51.2k', match: '99.98%', isPeak: true },
+  ];
+
   return (
     <div className="space-y-6">
       
@@ -51,22 +78,111 @@ export const DashboardPage: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Date Range Selector Pill */}
-          <motion.div
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="bg-white border border-slate-200/90 rounded-full px-4 py-2 text-xs font-medium text-slate-700 flex items-center gap-2 shadow-xs cursor-pointer hover:border-slate-300"
-          >
-            <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth="2" />
-              <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2" />
-              <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2" />
-              <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2" />
-            </svg>
-            <span>29 Sep, 2026 – 01 Oct, 2026</span>
-            <span className="text-slate-400 text-[10px]">▼</span>
-          </motion.div>
+        <div className="flex items-center gap-3 relative">
+          
+          {/* Interactive Date Range Selector Pill */}
+          <div className="relative">
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setIsCalendarOpen(!isCalendarOpen)}
+              className={`bg-white border rounded-full px-4 py-2 text-xs font-medium flex items-center gap-2 shadow-xs cursor-pointer transition-colors ${
+                isCalendarOpen ? 'border-[#006241] text-[#006241] ring-1 ring-[#006241]' : 'border-slate-200/90 text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <svg className="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="18" rx="2" strokeWidth="2" />
+                <line x1="16" y1="2" x2="16" y2="6" strokeWidth="2" />
+                <line x1="8" y1="2" x2="8" y2="6" strokeWidth="2" />
+                <line x1="3" y1="10" x2="21" y2="10" strokeWidth="2" />
+              </svg>
+              <span className="font-medium">{selectedRange}</span>
+              <span className="text-slate-400 text-[10px]">▼</span>
+            </motion.button>
+
+            {/* Interactive Calendar Dropdown Popover */}
+            {isCalendarOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                className="absolute right-0 top-12 z-50 w-72 bg-white rounded-3xl p-4 shadow-2xl border border-slate-200 space-y-3"
+              >
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-900">Select Settlement Window</span>
+                  <button
+                    onClick={() => setIsCalendarOpen(false)}
+                    className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Presets */}
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Quick Presets</div>
+                  <div className="flex flex-wrap gap-1">
+                    {CALENDAR_PRESETS.map((p) => (
+                      <button
+                        key={p.label}
+                        onClick={() => {
+                          setSelectedRange(p.range);
+                          setIsCalendarOpen(false);
+                        }}
+                        className={`text-[11px] px-2.5 py-1 rounded-full border transition-all cursor-pointer ${
+                          selectedRange === p.range
+                            ? 'bg-[#e6f7ef] border-[#006241] text-[#006241] font-semibold'
+                            : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Mini Calendar View for Current Month */}
+                <div className="pt-2 border-t border-slate-100 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                    <span>September – October 2026</span>
+                    <span className="text-[10px] text-[#006241] font-mono">T+2 Cycle</span>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[10px]">
+                    <span className="text-slate-400 font-bold">M</span>
+                    <span className="text-slate-400 font-bold">T</span>
+                    <span className="text-slate-400 font-bold">W</span>
+                    <span className="text-slate-400 font-bold">T</span>
+                    <span className="text-slate-400 font-bold">F</span>
+                    <span className="text-slate-400 font-bold">S</span>
+                    <span className="text-slate-400 font-bold">S</span>
+                    {[25, 26, 27, 28, 29, 30, 1].map((day, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => {
+                          setSelectedRange(`${day} ${day > 20 ? 'Sep' : 'Oct'}, 2026`);
+                          setIsCalendarOpen(false);
+                        }}
+                        className={`py-1 rounded-lg font-mono transition-all cursor-pointer ${
+                          day === 29 || day === 30 || day === 1
+                            ? 'bg-[#006241] text-white font-bold'
+                            : 'hover:bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setIsCalendarOpen(false)}
+                  className="w-full py-2 bg-[#006241] hover:bg-[#004e34] text-white rounded-xl text-xs font-semibold cursor-pointer shadow-xs"
+                >
+                  Apply Settlement Range
+                </button>
+              </motion.div>
+            )}
+          </div>
 
           {/* Primary Green Action Pill Button with Spring Feedback */}
           <motion.button
@@ -293,7 +409,7 @@ export const DashboardPage: React.FC = () => {
               {/* Header + Segmented Period Filter */}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-2 border-b border-slate-100">
                 <div>
-                  <h2 className="text-base font-bold text-slate-900">Engagement Rates</h2>
+                  <h2 className="text-base font-bold text-slate-900">Settlement Volume & Velocity</h2>
                   <p className="text-[11px] text-slate-400">Reconciliation batch settlement velocity</p>
                 </div>
 
@@ -303,7 +419,7 @@ export const DashboardPage: React.FC = () => {
                     onClick={() => setFilterPeriod('Monthly')}
                     className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
                       filterPeriod === 'Monthly'
-                        ? 'bg-white text-slate-900 shadow-xs'
+                        ? 'bg-white text-slate-900 shadow-xs font-bold'
                         : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -313,7 +429,7 @@ export const DashboardPage: React.FC = () => {
                     onClick={() => setFilterPeriod('Annually')}
                     className={`px-3 py-1 rounded-full transition-all cursor-pointer ${
                       filterPeriod === 'Annually'
-                        ? 'bg-white text-slate-900 shadow-xs'
+                        ? 'bg-white text-slate-900 shadow-xs font-bold'
                         : 'text-slate-500 hover:text-slate-800'
                     }`}
                   >
@@ -326,9 +442,13 @@ export const DashboardPage: React.FC = () => {
               <div className="flex items-baseline justify-between">
                 <div>
                   <div className="text-3xl font-extrabold tracking-tight text-slate-900 font-mono">
-                    {run ? paise(run.totalSettledPaise) : '₹48,702.00'}
+                    {filterPeriod === 'Monthly'
+                      ? (run ? paise(run.totalSettledPaise) : '₹48,702.00')
+                      : '₹9,600,000.00'}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5">Total settled volume this cycle</div>
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {filterPeriod === 'Monthly' ? 'Total settled volume this cycle' : 'Cumulative settled volume (YTD)'}
+                  </div>
                 </div>
                 <motion.div
                   initial={{ scale: 0.8 }}
@@ -337,87 +457,66 @@ export const DashboardPage: React.FC = () => {
                   className="bg-[#00c070] text-white text-xs font-bold px-3 py-1 rounded-full shadow-xs flex items-center gap-1"
                 >
                   <span>▲</span>
-                  <span>+17.8%</span>
+                  <span>{filterPeriod === 'Monthly' ? '+17.8%' : '+34.2% YoY'}</span>
                 </motion.div>
               </div>
 
-              {/* 6-Capsule Bar Chart matching Pinterest Reference */}
+              {/* Dynamic Capsule Bar Chart matching Pinterest Reference */}
               <div className="space-y-2 pt-2">
-                <div className="h-44 flex items-end justify-between gap-3 px-2">
+                <div className="h-44 flex items-end justify-between gap-3 px-2 relative">
                   
-                  {/* Bar 1 - Striped Sage */}
-                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: '48%' }}
-                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.05 }}
-                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
-                    />
-                    <span className="text-[10px] font-semibold text-slate-400">Jan</span>
-                  </div>
+                  {(filterPeriod === 'Monthly' ? MONTHLY_BARS : ANNUALLY_BARS).map((bar) => {
+                    const isHovered = hoveredBar === bar.id;
+                    return (
+                      <div
+                        key={bar.id}
+                        onMouseEnter={() => setHoveredBar(bar.id)}
+                        onMouseLeave={() => setHoveredBar(null)}
+                        className="flex-1 flex flex-col items-center gap-2 h-full justify-end relative cursor-pointer group"
+                      >
+                        {/* Interactive Floating Hover Tooltip */}
+                        {isHovered && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            className="absolute -top-14 z-30 bg-slate-900 text-white rounded-xl p-2 text-center shadow-xl border border-slate-700 pointer-events-none whitespace-nowrap"
+                          >
+                            <div className="text-[10px] font-bold text-emerald-400 font-mono">{bar.volume}</div>
+                            <div className="text-[9px] text-slate-300 font-mono">{bar.orders} orders · {bar.match}</div>
+                          </motion.div>
+                        )}
 
-                  {/* Bar 2 - Striped Sage */}
-                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: '62%' }}
-                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.12 }}
-                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
-                    />
-                    <span className="text-[10px] font-semibold text-slate-400">Feb</span>
-                  </div>
+                        {bar.isPeak && !isHovered && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3, ...SPRING_FAST }}
+                            className="absolute -top-7 bg-slate-900 text-white text-[10px] font-mono px-2 py-0.5 rounded-md whitespace-nowrap shadow-xs"
+                          >
+                            {filterPeriod === 'Monthly' ? '₹48.7k Peak' : '₹9.6M Peak'}
+                          </motion.div>
+                        )}
 
-                  {/* Bar 3 - Striped Sage */}
-                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: '38%' }}
-                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.19 }}
-                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
-                    />
-                    <span className="text-[10px] font-semibold text-slate-400">Mar</span>
-                  </div>
-
-                  {/* Bar 4 - Striped Sage */}
-                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: '75%' }}
-                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.26 }}
-                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
-                    />
-                    <span className="text-[10px] font-semibold text-slate-400">Apr</span>
-                  </div>
-
-                  {/* Bar 5 - Striped Sage */}
-                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end">
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: '54%' }}
-                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.33 }}
-                      className="w-full max-w-[42px] rounded-full bar-striped border border-emerald-200/80"
-                    />
-                    <span className="text-[10px] font-semibold text-slate-400">May</span>
-                  </div>
-
-                  {/* Bar 6 - The Active Solid Forest Green Peak Bar */}
-                  <div className="flex-1 flex flex-col items-center gap-2 h-full justify-end relative">
-                    <motion.div
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.5, ...SPRING_FAST }}
-                      className="absolute -top-7 bg-slate-900 text-white text-[10px] font-mono px-2 py-0.5 rounded-md whitespace-nowrap shadow-xs"
-                    >
-                      ₹48.7k Peak
-                    </motion.div>
-                    <motion.div
-                      initial={{ height: 0 }}
-                      animate={{ height: '92%' }}
-                      transition={{ duration: 0.6, ease: CANONICAL_EASE, delay: 0.4 }}
-                      className="w-full max-w-[42px] rounded-full bg-[#006241] shadow-pill"
-                    />
-                    <span className="text-[10px] font-bold text-[#006241]">Jun</span>
-                  </div>
+                        <motion.div
+                          initial={{ height: 0 }}
+                          animate={{ height: bar.height }}
+                          transition={{ duration: 0.5, ease: CANONICAL_EASE }}
+                          className={`w-full max-w-[42px] rounded-full transition-all ${
+                            bar.isPeak
+                              ? 'bg-[#006241] shadow-pill group-hover:bg-[#004e34]'
+                              : isHovered
+                              ? 'bg-[#00c070]/60 border border-[#006241]'
+                              : 'bar-striped border border-emerald-200/80 group-hover:border-emerald-400'
+                          }`}
+                        />
+                        <span className={`text-[10px] font-semibold transition-colors ${
+                          bar.isPeak ? 'text-[#006241] font-bold' : isHovered ? 'text-slate-900 font-bold' : 'text-slate-400'
+                        }`}>
+                          {bar.label}
+                        </span>
+                      </div>
+                    );
+                  })}
 
                 </div>
               </div>

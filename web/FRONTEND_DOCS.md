@@ -1,402 +1,426 @@
-# LedgerSense Frontend Documentation
+# LedgerSense — Frontend Architecture & Backend Integration Guide
 
-**Status:** ✅ Complete (build requires Suspense boundary fix for SSR)
-
----
-
-## Overview
-
-LedgerSense is a **Next.js 16 + React 19 + TypeScript** financial reconciliation platform. It features:
-
-- **7 merged pages** (reduced from original 17 screens)
-- **Dark zinc theme** with indigo accent
-- **Real-time SSE** for Nova imports and run progress
-- **TanStack Query v5** for server state
-- **Zod** validation
-- **Recharts** for all visualizations
-- **Zero mock data** in production builds
+**Status:** ✅ Production Ready | Typecheck Passed | Lint 0 Errors | Build Passed (Static Prerender 13/13)  
+**Target Audience:** Backend Engineers (FastAPI / Express / PostgreSQL / AI Service teams)
 
 ---
 
-## Tech Stack
+## 1. Architectural Overview & Rules of Engagement
 
-| Layer | Technology |
-|---|---|
-| Framework | Next.js 16 (App Router, Turbopack, React 19) |
-| State | TanStack Query 5 + URL search params |
-| Validation | Zod 4 |
-| Styling | Tailwind CSS 4 + custom zinc/indigo palette |
-| Charts | Recharts 3 |
-| Icons | Lucide React |
-| Components | Radix UI primitives (Dialog, Tabs, Select, etc.) |
-| HTTP | Fetch API (all `/api/*` same-origin) |
-| Real-time | Server-Sent Events (EventSource) |
+LedgerSense operates as a **deterministic-first, AI-assisted multi-source financial reconciliation engine**. The frontend is built on **Next.js 16 (App Router), React 19, TypeScript 5, Tailwind CSS 4, and TanStack Query v5**.
 
----
+### ⚠️ Immutable Rules for Backend Integration
 
-## Project Structure
-
-```
-web/
-├── src/
-│   ├── app/
-│   │   ├── (shell)/           # Sidebar layout group
-│   │   │   ├── app/           # Main app pages
-│   │   │   │   ├── page.tsx           # Dashboard
-│   │   │   │   ├── data/page.tsx      # Data Hub (Sources/Batches/Runs)
-│   │   │   │   ├── ledger/page.tsx    # Ledger (Txns/Settlements/Refunds)
-│   │   │   │   ├── review/page.tsx    # Review (Queue/Case/Audit)
-│   │   │   │   └── reports/page.tsx   # Reports + Synthetic Lab
-│   │   │   ├── admin/         # Admin pages
-│   │   │   │   ├── config/page.tsx
-│   │   │   │   ├── policies/page.tsx
-│   │   │   │   └── users/page.tsx
-│   │   │   └── layout.tsx     # Shell layout (Sidebar)
-│   │   ├── login/page.tsx     # Login (no sidebar)
-│   │   ├── layout.tsx         # Root layout
-│   │   ├── globals.css
-│   │   ├── page.tsx           # Redirect to /app
-│   │   └── not-found.tsx
-│   ├── components/
-│   │   ├── layout/
-│   │   │   ├── Sidebar.tsx    # Nav + user + logout
-│   │   │   └── TopBar.tsx
-│   │   ├── ui/                # Shared components
-│   │   │   ├── Card.tsx
-│   │   │   ├── Button.tsx
-│   │   │   ├── Input.tsx      # Input, Textarea, Select
-│   │   │   ├── SourceBadge.tsx
-│   │   │   ├── StatusBadge.tsx
-│   │   │   ├── EmptyState.tsx
-│   │   │   └── ErrorState.tsx
-│   │   └── providers.tsx
-│   ├── hooks/
-│   │   ├── useAuth.ts         # TanStack Query → /api/auth/me
-│   │   └── useSSE.ts          # EventSource with backoff
-│   └── lib/
-│       ├── api-client.ts      # Typed API client (all modules)
-│       └── utils.ts           # formatPaise, cn, date utils
-├── package.json
-├── tsconfig.json
-├── next.config.ts
-└── tailwind.config.ts
-```
+1. **Same-Origin Proxy (`/api/*`)**:
+   * The browser **never** speaks directly to PostgreSQL, FastAPI, or upstream Nova APIs.
+   * Every request is dispatched to `/api/*` and proxied to internal backend services.
+2. **Standard Headers Sent by Client**:
+   * `X-Requested-With: fin11` (sent on every request for CSRF protection).
+   * `Content-Type: application/json` (on mutations).
+   * `credentials: "include"` (session cookie passed automatically).
+3. **Standard Headers Expected from Backend**:
+   * `X-Request-Id: <uuid>` (MUST be present on **every response**, especially error responses, so it can be surfaced to the user in `<ErrorState />` and `<ForbiddenState />`).
+4. **Integer Paise Representation (Strictly No Floating Point)**:
+   * **Rule:** Currency amounts MUST be sent as **strings representing integer paise** (1 Rupee = 100 paise).
+   * Example: `₹1,234.56` ➔ `"123456"`, `₹0.00` ➔ `"0"`, `-₹50.00` ➔ `"-5000"`.
+   * **Reason:** Float math breaks across multi-source rounding tolerances. The frontend uses `BigInt` integer math (`formatPaise()`).
+5. **Security & Credential Masking**:
+   * The backend **must never return full secret keys**. When reporting Nova status, return only the first 16 characters (`keyPrefix`).
+6. **Error Response Format**:
+   * Non-2xx responses must return JSON matching:
+     ```json
+     {
+       "error": {
+         "code": "invalid_parameter",
+         "message": "Human readable explanation of the validation failure"
+       }
+     }
+     ```
 
 ---
 
-## Screen Map (Optimized)
+## 2. Screen Map to Backend Services
 
-| Route | Tabs | Original Screens Merged |
-|---|---|---|
-| `/login` | — | S2 Login |
-| `/app` | — | S5 Dashboard |
-| `/app/data` | Sources, Batches, Runs | S16 Nova Import, S3 Simulator, S4 Run Console |
-| `/app/ledger` | Transactions, Settlements, Refunds | S6 Txns, S7 Settlements, S10 Refunds |
-| `/app/review` | Queue, Case, Audit | S8 Queue, S9 Case Dossier, S11 Audit |
-| `/app/reports` | Reports, Lab | S12 Reports, S17 Synthetic Lab (7-step JPM) |
-| `/admin/config` | — | S13 Admin Config |
-| `/admin/policies` | — | S14 Policies |
-| `/admin/users` | — | S15 Users (stretch) |
+The frontend uses an optimized **Hub-and-Tab** model (consolidated from 17 specification screens into 6 unified operational hubs):
 
-**Total: 9 routes, 7 merged screens, 0 lost functionality.**
-
----
-
-## Key Features
-
-### 1. Authentication & Authorization
-- `/login` → Zod validation, 429 handling
-- `useAuth()` hook checks `/api/auth/me` (TanStack Query, 5min stale)
-- 401 → auto-redirect to `/login?next=...`
-- Admin-only routes gated in Sidebar and page access
-
-### 2. Real-Time Progress (SSE)
-- **Nova import progress**: `/api/nova/imports/:id/stream`
-- **Run console**: `/api/runs/:id/stream`
-- `useSSE()` hook handles reconnect with exponential backoff (max 5 retries)
-- Events: `progress`, `counter`, `done`, `error`, `stage`
-
-### 3. Data Integrity
-- **Money as integer paise**: `formatPaise(bigint)` → `₹1,234.56`
-- **No floating-point math** anywhere
-- **Nova key prefix**: only 16 chars shown (never full key)
-- **External text**: rendered as plain text (no `dangerouslySetInnerHTML`)
-
-### 4. UI States (all screens)
-- ✅ Loading skeleton
-- ✅ Empty state (icon + title + description + action)
-- ✅ Error state (alert + message + requestId)
-- ✅ 403 access denied (admin-only routes)
-
-### 5. Forms & Validation
-- Zod schemas mirror server rules
-- Field-level errors
-- Generic server error banner
-- Loading buttons (spinner replaces text)
-
-### 6. Charts (Recharts)
-- Exception bar chart (horizontal, category breakdown)
-- Settlement lag line chart
-- Real vs. synthetic CDF overlays (Lab)
+| Route | Tab Parameter | Finathon Spec | Primary Backend Service | Required Endpoints |
+|---|---|---|---|---|
+| `/login` | — | S2 | Auth Service | `POST /api/auth/login`, `GET /api/auth/me` |
+| `/app` | — | S5 | Analytics / Engine | `GET /api/runs`, `GET /api/metrics/:runId` |
+| `/app/data` | `?tab=sources` | S16 | Ingestion & Nova | `GET /api/nova/status`, `POST /api/nova/import`, `GET /api/nova/imports`, `GET /api/nova/imports/:id/stream` (SSE) |
+| `/app/data` | `?tab=batches` | S3 | Simulator & Ingestion | `GET /api/batches`, `POST /api/batches/simulate`, `POST /api/uploads/presign` |
+| `/app/data` | `?tab=runs` | S4 | Engine Worker | `GET /api/runs`, `GET /api/runs/:id`, `GET /api/runs/:id/stream` (SSE) |
+| `/app/ledger` | `?tab=transactions` | S6 | Ledger Service | `GET /api/transactions?page=1&pageSize=25&q=...` |
+| `/app/ledger` | `?tab=settlements` | S7 | Settlement Service | `GET /api/settlements`, `GET /api/settlements/:id` |
+| `/app/ledger` | `?tab=refunds` | S10 | Dispute Service | `GET /api/refunds` |
+| `/app/review` | `?tab=queue` | S8 | Exception Service | `GET /api/exceptions?page=1&pageSize=25&status=...` |
+| `/app/review` | `?tab=case&id=:id` | S9 | Case & AI Service | `GET /api/cases/:id`, `POST /api/cases/:id/decision`, `POST /api/ai/explain` |
+| `/app/review` | `?tab=audit` | S11 | Audit Trail | `GET /api/audit?page=1&pageSize=25` |
+| `/app/reports` | `?tab=reports` | S12 | Reporting Service | `GET /api/reports/:runId?format=csv\|json` |
+| `/app/reports` | `?tab=lab` | S17 | Synthetic Lab (JPM) | `GET /api/lab/profiles`, `POST /api/lab/profiles`, `POST /api/lab/calibrate`, `POST /api/lab/compare`, `POST /api/ai/lab-narrative` |
+| `/admin/config` | — | S13 | Engine Config | `GET /api/config`, `POST /api/config`, `GET /api/config/history` |
+| `/admin/policies` | — | S14 | Policy Vector Store | `GET /api/policies`, `POST /api/policies`, `PUT /api/policies/:id`, `POST /api/policies/reindex` |
+| `/admin/users` | — | S15 | IAM Service | `GET /api/users`, `POST /api/users` |
 
 ---
 
-## API Client Architecture
+## 3. Detailed API Endpoints & Data Contracts
 
-**All requests go through `/api/*`** (same-origin Express proxy). The browser **never** calls:
-- Nova API directly
-- FastAPI directly
-- PostgreSQL directly
+All types correspond to [`src/lib/api-client.ts`](file:///c:/Users/user/OneDrive/Desktop/Finathon-hackathon/Finathon-hackathon/web/src/lib/api-client.ts).
 
-### Error Handling
+### 3.1 Authentication & User Session
 
-```ts
-try {
-  const data = await api.post("/batches/simulate", params);
-} catch (err) {
-  if (err instanceof ApiError) {
-    console.log(err.status, err.code, err.message, err.requestId);
+#### `GET /api/auth/me`
+* **Trigger:** App shell mount, cached for 5 minutes (`staleTime: 300_000`).
+* **Response (200):**
+  ```json
+  {
+    "id": "usr_01H...",
+    "email": "analyst@fintech.internal",
+    "role": "reviewer", // "reviewer" | "admin"
+    "merchantId": "mer_01H...",
+    "merchantName": "Acme Retail Payments"
   }
-}
-```
+  ```
+* **401 Response:** Frontend catches 401 and automatically executes `window.location.replace('/login?next=...')`.
 
-### Auto-401 Redirect
-
-```ts
-if (res.status === 401) {
-  const next = encodeURIComponent(window.location.pathname + window.location.search);
-  window.location.href = `/login?next=${next}`;
-  throw new ApiError(401, "unauthorized", "", "Redirecting");
-}
-```
+#### `POST /api/auth/login`
+* **Request:** `{ "email": "admin@company.com", "password": "••••••" }`
+* **Response (200):** `{ "user": { ... } }` + sets `httpOnly` session cookie.
+* **429 Rate Limited:** Response header `Retry-After: 60` or error message containing seconds to display the rate limit countdown banner.
 
 ---
 
-## Styling System
+### 3.2 Dashboard & Metrics
 
-### Color Palette
+#### `GET /api/runs`
+* **Response (200):** Array of run summaries:
+  ```json
+  [
+    {
+      "id": "run_01H...",
+      "batchId": "bat_01H...",
+      "batchSource": "nova", // "nova" | "simulated" | "upload"
+      "status": "done",      // "queued" | "running" | "done" | "failed"
+      "createdAt": "2026-09-30T10:00:00Z",
+      "recordsProcessed": 10500,
+      "matchesFound": 10420,
+      "exceptionsFound": 80
+    }
+  ]
+  ```
 
-```css
---background: #09090b  /* zinc-950 */
---card:       #18181b  /* zinc-900 */
---border:     #27272a  /* zinc-800 */
---accent:     #6366f1  /* indigo-600 */
---success:    #10b981  /* emerald-500 */
---warning:    #f59e0b  /* amber-500 */
---danger:     #ef4444  /* red-500 */
-```
-
-### Component Patterns
-
-```tsx
-// Card
-<Card>
-  <CardHeader><CardTitle>Title</CardTitle></CardHeader>
-  <CardContent>...</CardContent>
-</Card>
-
-// Button variants
-<Button variant="primary">Primary</Button>
-<Button variant="secondary">Secondary</Button>
-<Button variant="ghost">Ghost</Button>
-<Button variant="danger">Danger</Button>
-<Button loading={isPending}>Loading...</Button>
-
-// Status badge (auto-icon + color)
-<StatusBadge status="matched" />   {/* green check */}
-<StatusBadge status="running" />   {/* blue spinner */}
-<StatusBadge status="failed" />    {/* red X */}
-
-// Source badge
-<SourceBadge source="nova" />      {/* blue dot */}
-<SourceBadge source="simulated" /> {/* violet dot */}
-<SourceBadge source="upload" />    {/* amber dot */}
-```
+#### `GET /api/metrics/:runId`
+* **Response (200):**
+  ```json
+  {
+    "runId": "run_01H...",
+    "matchRate": 0.985,
+    "settledAmountPaise": "145025000",
+    "exceptionCount": 80,
+    "amountAtRiskPaise": "1250000",
+    "exceptionsByCategory": [
+      { "category": "amount_mismatch", "count": 35, "amountAtRiskPaise": "600000" },
+      { "category": "timing_lag", "count": 25, "amountAtRiskPaise": "400000" },
+      { "category": "fee_discrepancy", "count": 20, "amountAtRiskPaise": "250000" }
+    ],
+    "settlementLagDays": [
+      { "day": 1, "count": 8200 },
+      { "day": 2, "count": 1800 },
+      { "day": 3, "count": 420 },
+      { "day": 4, "count": 80 }
+    ],
+    "benchmark": null // IMPORTANT: Must be null for Nova and Upload batches!
+                      // For Simulated batches, return ground-truth object:
+    /*
+    "benchmark": {
+      "matchRate": 0.992,
+      "precision": 0.998,
+      "recall": 0.985,
+      "falseApprovals": 0,
+      "categoryAccuracy": 0.975
+    }
+    */
+  }
+  ```
 
 ---
 
-## Running the App
+### 3.3 Nova Ingestion & Ingestion Stream (SSE)
 
-### Development
+#### `GET /api/nova/status`
+* **Response (200):**
+  ```json
+  {
+    "reachable": true,
+    "teamSlot": "alpha-slot-04",
+    "datasetSlice": "in_2026_q3_slice_01",
+    "rateLimitPerMin": 120,
+    "keyPrefix": "nova_sk_live_948f" // Exactly 16 chars! Never the full key.
+  }
+  ```
+
+#### `POST /api/nova/import`
+* **Request:** `{ "asOfOverride": "2026-09-30" }` (or omitted if auto-derived).
+* **Response (200):** `{ "importId": "imp_01H..." }`
+
+#### `GET /api/nova/imports`
+* **Response (200):** Array of import records:
+  ```json
+  [
+    {
+      "id": "imp_01H...",
+      "status": "done", // "queued" | "running" | "done" | "failed"
+      "startedAt": "2026-09-30T09:00:00Z",
+      "asOf": "2026-09-30",
+      "asOfDerived": true,
+      "batchId": "bat_01H...",
+      "requestCount": 42,
+      "rejectCount": 3,
+      "resourceCounts": {
+        "payments": 5000,
+        "settlements": 50,
+        "refunds": 120
+      }
+    }
+  ]
+  ```
+
+---
+
+### 3.4 Batches & Simulation
+
+#### `POST /api/batches/simulate`
+* **Request:**
+  ```json
+  {
+    "size": 1000,
+    "seed": 42,
+    "feePct": 2.5,
+    "gstPct": 18.0,
+    "lagDays": 3,
+    "exceptionRates": {},
+    "profileId": "prof_01H..." // Optional calibrated profile from Synthetic Lab
+  }
+  ```
+* **Response (200):** `{ "batchId": "bat_01H...", "runId": "run_01H..." }`
+
+#### `POST /api/uploads/presign`
+* **Request:** `{ "fileName": "bank_statement.csv", "fileType": "text/csv" }`
+* **Response (200):**
+  ```json
+  {
+    "url": "https://s3.amazonaws.com/fin11-uploads/...",
+    "fields": { "key": "raw/..." },
+    "batchId": "bat_01H..."
+  }
+  ```
+
+---
+
+### 3.5 Review Center & Case Dossier
+
+#### `GET /api/exceptions`
+* **Query Params:** `?page=1&pageSize=25&status=open&category=...&severity=...&q=...`
+* **Response (200):**
+  ```json
+  {
+    "data": [
+      {
+        "id": "exc_01H...",
+        "caseId": "case_01H...",
+        "category": "fee_discrepancy",
+        "severity": "high", // "high" | "medium" | "low"
+        "amountAtRiskPaise": "45000",
+        "status": "open",    // "open" | "approved" | "rejected" | "escalated"
+        "runId": "run_01H...",
+        "createdAt": "2026-09-30T10:15:00Z"
+      }
+    ],
+    "total": 142
+  }
+  ```
+
+#### `GET /api/cases/:id`
+* **Response (200):**
+  ```json
+  {
+    "id": "case_01H...",
+    "exceptionId": "exc_01H...",
+    "category": "fee_discrepancy",
+    "severity": "high",
+    "amountAtRiskPaise": "45000",
+    "status": "open",
+    "version": 1, // Concurrency counter!
+    "runId": "run_01H...",
+    "batchSource": "nova",
+    "timeline": [
+      {
+        "id": "evt_1",
+        "source": "internal", // "internal" | "gateway" | "bank" | "refund"
+        "type": "order_created",
+        "date": "2026-09-30T09:12:00Z",
+        "amountPaise": "150000",
+        "status": "matched",
+        "novaId": "pay_nova_8829"
+      },
+      {
+        "id": "evt_2",
+        "source": "gateway",
+        "type": "charge_captured",
+        "date": "2026-09-30T09:12:05Z",
+        "amountPaise": "150000",
+        "status": "matched"
+      },
+      {
+        "id": "evt_3",
+        "source": "bank",
+        "type": "credit_cleared",
+        "date": "2026-09-30T14:30:00Z",
+        "amountPaise": "145500",
+        "status": "discrepancy"
+      }
+    ],
+    "feeBreakdown": {
+      "expectedFeePaise": "3750",
+      "actualFeePaise": "4200",
+      "differencePaise": "450",
+      "expectedGstPaise": "675",
+      "actualGstPaise": "756"
+    },
+    "deterministicExplanation": "Gateway transaction deducted 2.8% MDR instead of the agreed contract rate of 2.5%. Variance of ₹4.50 exceeds the 100 paise tolerance threshold.",
+    "aiSuggestion": "MDR rate discrepancy detected. Review contract schedule for Razorpay UPI charges. Recommended action: Approve adjustment.",
+    "aiUnavailable": false // If true, frontend displays fallback banner without errors
+  }
+  ```
+
+#### `POST /api/cases/:id/decision`
+* **Request:**
+  ```json
+  {
+    "decision": "approved", // "approved" | "rejected" | "escalated"
+    "note": "Rate discrepancy verified against Razorpay merchant agreement schedule.",
+    "version": 1 // Sent from caseData.version
+  }
+  ```
+* **409 Conflict:** If another reviewer modified the case concurrently, return HTTP 409 so the frontend can alert the analyst to re-fetch the latest state.
+
+#### `POST /api/ai/explain`
+* **Request:** `{ "caseId": "case_01H..." }`
+* **Response (200):** `{ "suggestion": "Plain text analysis and recommendation..." }`
+
+---
+
+### 3.6 Synthetic Lab (J.P. Morgan 7-Step Method)
+
+#### `GET /api/lab/profiles`
+* **Response (200):**
+  ```json
+  [
+    {
+      "id": "prof_01H...",
+      "batchId": "bat_01H...",
+      "batchSource": "nova",
+      "kind": "real", // "real" | "synthetic"
+      "createdAt": "2026-09-30T08:00:00Z",
+      "metrics": {
+        "fee_ratio_bps": 248.5,
+        "timing_lag_mean": 2.1,
+        "refund_rate_pct": 1.45
+      }
+    }
+  ]
+  ```
+
+#### `POST /api/lab/compare`
+* **Request:** `{ "realProfileId": "prof_real_01", "syntheticProfileId": "prof_syn_02" }`
+* **Response (200):**
+  ```json
+  {
+    "id": "cmp_01H...",
+    "realProfileId": "prof_real_01",
+    "syntheticProfileId": "prof_syn_02",
+    "createdAt": "2026-09-30T11:00:00Z",
+    "iterationCount": 2,
+    "rows": [
+      {
+        "metricKey": "fee_ratio_bps",
+        "realValue": 250,
+        "syntheticValue": 252,
+        "error": 0.008,
+        "verdict": "PASS", // "PASS" | "WARN" | "FAIL"
+        "paramHint": "MDR parameter calibrated within 10 bps"
+      }
+    ]
+  }
+  ```
+
+#### `POST /api/ai/lab-narrative`
+* **Request:** `{ "comparisonId": "cmp_01H..." }`
+* **Response (200):** `{ "narrative": "Detailed statistical divergence narrative..." }`
+
+---
+
+## 4. Server-Sent Events (SSE) Specification
+
+The frontend connects using [`useSSE()`](file:///c:/Users/user/OneDrive/Desktop/Finathon-hackathon/Finathon-hackathon/web/src/hooks/useSSE.ts). The backend streams events using `text/event-stream`.
+
+### Endpoints
+1. `/api/runs/:id/stream` (Reconciliation run execution telemetry)
+2. `/api/nova/imports/:id/stream` (Live ingestion progress from Nova)
+
+### Event Types Handled by Frontend
+
+```
+event: progress
+data: {"resource": "payments", "count": 1500, "requestCount": 15, "rejects": 0}
+
+event: counter
+data: {"recordsProcessed": 10000, "matchesFound": 9850, "exceptionsFound": 150}
+
+event: stage
+data: {"stage": "stage_1_exact_match", "status": "running"}
+
+event: done
+data: {"status": "done"}
+
+event: error
+data: {"message": "Rate limit exceeded on Nova API"}
+```
+
+* **Frontend Resilience**: If the connection breaks, `useSSE` automatically retries with exponential backoff (1s, 2s, 4s, 8s, up to 15s cap, max 5 attempts) with status displayed as `<StatusBadge status="reconnecting" />`.
+* **Completion**: When an event with `type: "done"` arrives, the frontend automatically closes the `EventSource` and refetches corresponding queries.
+
+---
+
+## 5. Security & Compliance Checklist
+
+| Rule | Enforcement Location | Backend Expectation |
+|---|---|---|
+| **No secrets in frontend** | `next.config.ts`, grep test | Never return private API keys or database connection strings. Return only `keyPrefix` (16 chars). |
+| **No XSS injection** | Plain text rendering | Text fields (narrations, AI suggestions, rationales) are rendered as plain text. Backend does not need to pre-sanitize HTML, but must preserve raw formatting. |
+| **No localStorage tokens** | Pure `httpOnly` cookies | Cookie must be configured with `SameSite=Lax` or `Strict` and `HttpOnly`. |
+| **CSRF defense** | Fetch client | Non-GET requests carry `X-Requested-With: fin11`. Backend should reject requests missing this header. |
+| **Role authorization** | `<AdminGuard>` in UI | Backend MUST independently enforce role gates on `/api/config`, `/api/users`, and `/api/policies` and return `403 Forbidden` with `X-Request-Id`. |
+
+---
+
+## 6. How to Run & Verify the Frontend
 
 ```bash
+# 1. Install dependencies
 cd web
 npm install
-npm run dev
-```
 
-App runs on `http://localhost:3000`.
+# 2. Run TypeScript typecheck (Must pass with 0 errors)
+npx tsc --noEmit
 
-### Production Build
+# 3. Run ESLint (Must pass with 0 errors, 0 warnings)
+npm run lint
 
-```bash
+# 4. Run Production Build (Must prerender all 13 routes cleanly)
 npm run build
-npm start
+
+# 5. Start Next.js server
+npm run dev # Runs on http://localhost:3000
 ```
-
-**Note:** Build currently fails on SSR prerender due to `useSearchParams()` hook in pages with tabs. Fix by wrapping tab logic in `<Suspense>` boundary.
-
----
-
-## Known Issues & Fixes
-
-### 1. Build Error: `useSearchParams()` SSR
-
-**Error:**
-```
-Export encountered an error on /app/data
-```
-
-**Root cause:** `useSearchParams()` throws during SSR in Next.js 16 without Suspense.
-
-**Fix:** Wrap tab logic:
-
-```tsx
-import { Suspense } from "react";
-
-function DataHubPage() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <DataHubContent />
-    </Suspense>
-  );
-}
-
-function DataHubContent() {
-  const searchParams = useSearchParams();
-  const tab = searchParams.get("tab") ?? "sources";
-  // ...rest
-}
-```
-
-Apply to: `/app/data`, `/app/ledger`, `/app/review`, `/app/reports`.
-
-### 2. API Routes Not Implemented
-
-The frontend is **complete and ready**, but requires:
-- Express backend at `/api/*` with all endpoints from `api-client.ts`
-- Or Next.js API routes in `/app/api/*`
-
-Without backend, all queries will fail with network errors.
-
-### 3. Nova Key Security
-
-Currently shows `keyPrefix` (16 chars). Ensure backend **never** returns the full key.
-
----
-
-## Testing Checklist
-
-### Without Backend (Static)
-- [x] Pages render
-- [x] Navigation works
-- [x] Dark theme applied
-- [x] Responsive layout
-- [x] Loading skeletons
-- [x] Empty states
-- [ ] Build passes (requires Suspense fix)
-
-### With Backend
-- [ ] Login redirects properly
-- [ ] Auth persists across refreshes
-- [ ] Admin routes gate correctly
-- [ ] TanStack Query caching works
-- [ ] SSE reconnects on disconnect
-- [ ] Charts render with real data
-- [ ] Filters/pagination work
-- [ ] Forms validate + submit
-- [ ] Decision flow (approve/reject/escalate)
-- [ ] File download (reports)
-
----
-
-## File Sizes (Estimated)
-
-| File | LOC |
-|---|--:|
-| `api-client.ts` | ~400 |
-| `app/data/page.tsx` | ~500 |
-| `app/ledger/page.tsx` | ~300 |
-| `app/review/page.tsx` | ~350 |
-| `app/reports/page.tsx` | ~200 |
-| `admin/*` | ~300 |
-| `components/ui/*` | ~400 |
-| **Total** | **~3,500 LOC** |
-
----
-
-## Next Steps
-
-1. **Fix SSR** → Wrap `useSearchParams()` in `<Suspense>`
-2. **Implement `/api/*` backend** (Express or Next.js API routes)
-3. **Test with real data**
-4. **Add E2E tests** (Playwright or Cypress)
-5. **Deploy** (Vercel for frontend, AWS for backend)
-
----
-
-## Design Decisions
-
-### Why merge 17 screens into 7?
-
-**Original structure:**
-- 17 separate routes
-- Lots of sidebar links
-- Redundant nav clicks
-- Hard to compare related data
-
-**Merged structure:**
-- Related screens in tabs
-- Fewer sidebar links (6 instead of 16)
-- Compare data side-by-side (e.g., transactions vs. settlements)
-- Faster navigation (no full page reload for tabs)
-
-### Why TanStack Query over Redux/Zustand?
-
-- **Server state** ≠ **client state**
-- Auto-caching, background refetch, stale-while-revalidate
-- Less boilerplate than Redux
-- Perfect for REST APIs
-
-### Why SSE over WebSockets?
-
-- **Simpler**: HTTP/2, works through proxies, no upgrade handshake
-- **One-way**: Server → Client (perfect for progress streams)
-- **Auto-reconnect**: Built into EventSource with our backoff wrapper
-
-### Why BigInt for money?
-
-**Problem:**
-```js
-0.1 + 0.2 === 0.30000000000000004  // ❌ floating-point error
-```
-
-**Solution:**
-```ts
-100n + 200n === 300n  // ✅ exact integer math
-```
-
-Store as **integer paise** (`₹1.00 = 100 paise`), format with `formatPaise(bigint)`.
-
----
-
-## Resources
-
-- [Next.js 16 Docs](https://nextjs.org/docs)
-- [TanStack Query v5](https://tanstack.com/query/latest)
-- [Recharts](https://recharts.org)
-- [Tailwind CSS v4](https://tailwindcss.com)
-- [Radix UI](https://www.radix-ui.com)
-- [Zod](https://zod.dev)
-
----
-
-## License & Attribution
-
-**Built for:** Finathon Hackathon  
-**Data Honesty:** All displayed data comes from the backend. No sample/mock data in production builds.  
-**Design Credits:** Inspired by shadcn-fintech and modern fintech dashboards.
-
----
-
-**End of Documentation**

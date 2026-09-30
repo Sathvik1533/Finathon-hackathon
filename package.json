@@ -1,0 +1,14 @@
+{
+  "name": "finathon-ledgersense",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FIN-11 LedgerSense | Dual Cloud Deployment (Vercel/Railway + AWS)",
+  "scripts": {
+    "build": "cd api && npm install && npm run build",
+    "start": "cd api && npm start",
+    "test": "cd api && npm test"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

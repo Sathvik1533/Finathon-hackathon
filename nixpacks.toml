@@ -1,0 +1,12 @@
+# Railway Nixpacks Configuration for FIN-11 LedgerSense
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["cd api && npm install"]
+
+[phases.build]
+cmds = ["cd api && npm run build"]
+
+[start]
+cmd = "cd api && npm start"

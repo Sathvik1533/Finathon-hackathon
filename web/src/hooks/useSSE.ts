@@ -25,13 +25,19 @@ export function useSSE(url: string | null, options: SSEOptions = {}) {
   const retryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCount = useRef(0);
   const optionsRef = useRef(options);
-  optionsRef.current = options;
+  const connectRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const connect = useCallback(() => {
     if (!url) return;
     esRef.current?.close();
 
-    setStatus("connecting");
+    queueMicrotask(() => {
+      setStatus("connecting");
+    });
     const es = new EventSource(url, { withCredentials: true });
     esRef.current = es;
 
@@ -69,12 +75,18 @@ export function useSSE(url: string | null, options: SSEOptions = {}) {
         retryCount.current++;
         setStatus("reconnecting");
         const delay = Math.min(1000 * 2 ** retryCount.current, 15000);
-        retryRef.current = setTimeout(connect, delay);
+        retryRef.current = setTimeout(() => {
+          connectRef.current();
+        }, delay);
       } else {
         setStatus("failed");
       }
     };
   }, [url]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     if (options.autoConnect !== false && url) {

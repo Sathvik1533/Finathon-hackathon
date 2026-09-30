@@ -35,7 +35,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const next = encodeURIComponent(
       window.location.pathname + window.location.search
     );
-    window.location.href = `/login?next=${next}`;
+    window.location.replace(`/login?next=${next}`);
     throw new ApiError(401, "unauthorized", "", "Session expired");
   }
 

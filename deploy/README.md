@@ -21,8 +21,8 @@ Designed for instant live demonstration in under 3 minutes.
    - Select **Deploy from GitHub repo** ➔ `Sathvik1533/Finathon-hackathon`.
    - Add Redis with 1 click: **+ New** ➔ **Database** ➔ **Add Redis** (sets `REDIS_URL`).
    - Add Environment Variables:
-     - `DATABASE_URL`: `postgresql://postgres:Sathvik1533v@db.lhxxsnxoirjbswdqzpyt.supabase.co:5432/postgres`
-     - `JWT_SECRET`: `finathon-secret-jwt-key-2026`
+     - `DATABASE_URL`: set the rotated provider connection string in Railway Variables; do not commit it.
+     - `JWT_SECRET`: set a newly generated high-entropy secret in Railway Variables; do not commit it.
      - `PORT`: `4000`
    - Under Settings, click **Generate Domain** (e.g. `https://finathon-production.up.railway.app`).
 

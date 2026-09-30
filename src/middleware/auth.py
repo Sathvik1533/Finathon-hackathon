@@ -14,7 +14,13 @@ from sqlalchemy.orm import Session
 from src.db.connection import get_db
 from src.db.repository import FinRepository
 
-JWT_SECRET = os.getenv("JWT_SECRET", "fin11-development-super-secret-key-32chars").encode("utf-8")
+_jwt_secret_value = os.getenv("JWT_SECRET")
+if not _jwt_secret_value:
+    is_production = os.getenv("APP_ENV", "").lower() == "production" or os.getenv("NODE_ENV", "").lower() == "production"
+    if is_production:
+        raise RuntimeError("JWT_SECRET must be configured in production")
+    _jwt_secret_value = os.urandom(32).hex()
+JWT_SECRET = _jwt_secret_value.encode("utf-8")
 
 
 def b64url_encode(data: bytes) -> str:

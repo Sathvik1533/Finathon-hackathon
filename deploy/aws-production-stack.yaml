@@ -34,13 +34,11 @@ Parameters:
   DatabaseUrl:
     Type: String
     NoEcho: true
-    Default: postgresql://postgres:Sathvik1533v@db.lhxxsnxoirjbswdqzpyt.supabase.co:5432/postgres
     Description: PostgreSQL connection string (Supabase or Amazon RDS with arbitrary precision NUMERIC)
 
   JwtSecret:
     Type: String
     NoEcho: true
-    Default: finathon-secret-jwt-key-2026
     Description: JWT signing secret for API authentication
 
   BedrockModelId:

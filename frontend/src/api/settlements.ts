@@ -1,5 +1,15 @@
 import { API_BASE, authHeader } from './headers';
 
+export interface SettlementChildOrder {
+  orderId: string;
+  grossPaise: number;
+  feePaise: number;
+  taxPaise: number;
+  netPaise: number;
+  status: string;
+  stage: number;
+}
+
 export interface Settlement {
   settlementId: string;
   totalGross: number;
@@ -11,6 +21,7 @@ export interface Settlement {
   status: 'MATCHED' | 'PENDING' | 'DISCREPANCY';
   orderCount: number;
   utr: string | null;
+  childOrders?: SettlementChildOrder[];
 }
 
 export async function getSettlements(token: string): Promise<Settlement[]> {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { PageShell } from '../components/layout/PageShell';
 import { syncNova } from '../api/nova';
 import type { NovaSyncResponse, NovaPayment, NovaGatewayTxn, NovaBankTxn, NovaSettlement } from '../api/nova';
@@ -21,6 +21,8 @@ export const TimelinePage: React.FC = () => {
     catch { /* ignore */ }
     finally { setLoading(false); }
   };
+
+  useEffect(() => { sync(); }, [user?.token]);
 
   const payment = data?.payments.find((p: NovaPayment) => p.order_ref === selected);
   const gateway = data?.gatewayTransactions.find((g: NovaGatewayTxn) => g.order_ref === selected);

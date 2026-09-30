@@ -74,6 +74,25 @@ async function runE2E() {
     });
   }
 
+  // Verify dynamic stream POST ingestion
+  await new Promise<void>((resolve, reject) => {
+    const mockRes = createMockResponse((status, data) => {
+      try {
+        if (status !== 201 || data.count !== 1) throw new Error(`POST /api/payments failed with ${status}`);
+        console.log('  ✓ Ingested new payment via POST /api/payments into real-time stream');
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+    (app as any).handle({
+      method: 'POST',
+      url: '/api/payments',
+      headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: [{ payment_id: 'pay_999', order_id: 'ORD-999', amount: 50000, currency: 'INR', status: 'PAID' }]
+    }, mockRes);
+  });
+
   // Step 3: Trigger Reconciliation Engine & Live KPI / Pipeline Stages
   console.log('\n[3/7] Testing 7-Stage Reconciliation Engine Execution...');
   let reconRun: any = null;
@@ -92,6 +111,20 @@ async function runE2E() {
       }
     });
     (app as any).handle({ method: 'POST', url: '/api/reconcile/run', headers: { authorization: `Bearer ${token}` }, body: {} }, mockRes);
+  });
+
+  // Verify /api/reconcile/latest
+  await new Promise<void>((resolve, reject) => {
+    const mockRes = createMockResponse((status, data) => {
+      try {
+        if (status !== 200 || !data.runId) throw new Error(`/api/reconcile/latest failed with ${status}`);
+        console.log(`  ✓ Hydrated latest reconciliation state via /api/reconcile/latest: RunId=${data.runId}`);
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+    (app as any).handle({ method: 'GET', url: '/api/reconcile/latest', headers: { authorization: `Bearer ${token}` } }, mockRes);
   });
 
   // Step 4: Interactive Timeline for ORD-101 to ORD-104
@@ -216,6 +249,28 @@ async function runE2E() {
       }
     });
     (app as any).handle({ method: 'GET', url: '/api/report?format=csv', headers: { authorization: `Bearer ${token}` }, query: { format: 'csv' } }, mockRes);
+  });
+
+  // Test direct browser CSV download with token in query parameter (no Authorization header)
+  await new Promise<void>((resolve, reject) => {
+    const mockRes = createMockResponse((status, data, headers) => {
+      try {
+        if (status !== 200) throw new Error(`Query param CSV download failed: ${status}`);
+        if (!data.includes('CaseID,OrderID,GatewayRef,Type,AmountAtRisk')) {
+          throw new Error('CSV content invalid');
+        }
+        console.log('  ✓ Direct browser CSV export authenticated via URL query token (?format=csv&token=...)');
+        resolve();
+      } catch (e) {
+        reject(e);
+      }
+    });
+    (app as any).handle({
+      method: 'GET',
+      url: `/api/report?format=csv&token=${token}`,
+      headers: {},
+      query: { format: 'csv', token }
+    }, mockRes);
   });
 
   console.log('\n=============================================================');

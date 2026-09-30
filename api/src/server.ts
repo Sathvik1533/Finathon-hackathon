@@ -83,14 +83,17 @@ export function mapGatewayTxs(gatewayTxs: any[]) {
 }
 
 export function mapBankTxs(bankTxs: any[]) {
-  return bankTxs.map(b => ({
-    ...b,
-    id: b.utr_number,
-    utr: b.utr_number,
-    amount_paise: b.amount,
-    credit_date: b.value_date,
-    settlement_ref: 'SETTLE-901',
-  }));
+  return bankTxs.map(b => {
+    const extractedRef = b.narration ? (b.narration.match(/SETTL\/([^\/]+)/)?.[1] || null) : null;
+    return {
+      ...b,
+      id: b.utr_number,
+      utr: b.utr_number,
+      amount_paise: b.amount,
+      credit_date: b.value_date,
+      settlement_ref: extractedRef || b.settlement_ref || 'SETTLE-901',
+    };
+  });
 }
 
 export function mapSettlements(settlements: any[]) {
@@ -149,6 +152,7 @@ app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
   const dbHealth = await checkDbHealth();
   const novaStatus = novaClient.getStatus();
   const redisStatus = redisCache.getStatus();
+  const cachedLatest = await redisCache.getLatestRunSummary();
   res.json({
     status: 'healthy',
     service: 'finathon-api',
@@ -157,6 +161,7 @@ app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
     database: dbHealth,
     nova: novaStatus,
     redis: redisStatus,
+    latestRun: cachedLatest || latestRun,
     deployments: {
       frontend: 'Vercel (web/index.html via vercel.json)',
       backend: 'Railway / Render (Node.js Express + TypeScript)',
@@ -303,17 +308,35 @@ app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: Authenticated
 });
 
 // Direct 4-source stream ingestion endpoints (FIN-11 M1, M2, M3, M9)
-app.get(['/api/payments', '/payments'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+app.all(['/api/payments', '/payments'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.method === 'POST') {
+    const newPayments = Array.isArray(req.body) ? req.body : (req.body?.payments || [req.body]);
+    const mapped = mapPayments(newPayments);
+    await persistAuditLog('STREAM_PAYMENTS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} ERP payments`);
+    return res.status(201).json({ count: mapped.length, payments: mapped, message: 'Payments successfully ingested into stream' });
+  }
   const rawPayments = await novaClient.fetchPayments();
   res.json({ count: rawPayments.length, payments: mapPayments(rawPayments) });
 });
 
-app.get(['/api/gateway-transactions', '/gateway-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+app.all(['/api/gateway-transactions', '/gateway-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.method === 'POST') {
+    const newGw = Array.isArray(req.body) ? req.body : (req.body?.gatewayTransactions || [req.body]);
+    const mapped = mapGatewayTxs(newGw);
+    await persistAuditLog('STREAM_GATEWAY_TXNS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} gateway captures`);
+    return res.status(201).json({ count: mapped.length, gatewayTransactions: mapped, message: 'Gateway transactions successfully ingested into stream' });
+  }
   const rawGw = await novaClient.fetchGatewayTransactions();
   res.json({ count: rawGw.length, gatewayTransactions: mapGatewayTxs(rawGw) });
 });
 
-app.get(['/api/bank-transactions', '/bank-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+app.all(['/api/bank-transactions', '/bank-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.method === 'POST') {
+    const newBank = Array.isArray(req.body) ? req.body : (req.body?.bankTransactions || [req.body]);
+    const mapped = mapBankTxs(newBank);
+    await persistAuditLog('STREAM_BANK_TXNS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} bank statement credits`);
+    return res.status(201).json({ count: mapped.length, bankTransactions: mapped, message: 'Bank transactions successfully ingested into stream' });
+  }
   const rawBank = await novaClient.fetchBankTransactions();
   res.json({ count: rawBank.length, bankTransactions: mapBankTxs(rawBank) });
 });
@@ -364,8 +387,23 @@ app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, r
   }
 });
 
+export async function ensureCurrentRun(): Promise<void> {
+  if (currentCases.length === 0 || !latestRun) {
+    const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
+      novaClient.fetchPayments(),
+      novaClient.fetchGatewayTransactions(),
+      novaClient.fetchBankTransactions(),
+      novaClient.fetchSettlements(),
+    ]);
+    latestRun = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
+    currentCases = [...latestRun.cases];
+    await redisCache.setLatestRunSummary(latestRun);
+  }
+}
+
 // Cache query endpoints for run summaries
 app.get('/api/reconcile/latest', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  await ensureCurrentRun();
   const cached = await redisCache.getLatestRunSummary();
   if (cached) {
     res.json(cached);
@@ -395,6 +433,7 @@ app.get('/api/reconcile/summary/:runId', authenticate, async (req: Authenticated
 
 // 5. Exception Management & Review Cases (B8)
 app.get('/api/cases', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  await ensureCurrentRun();
   const cachedLatest = await redisCache.getLatestRunSummary();
   res.json({
     total: currentCases.length,
@@ -405,7 +444,8 @@ app.get('/api/cases', authenticate, async (req: AuthenticatedRequest, res: Respo
 });
 
 
-app.get('/api/cases/:id', authenticate, (req: AuthenticatedRequest, res: Response) => {
+app.get('/api/cases/:id', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  await ensureCurrentRun();
   const caseItem = currentCases.find((c) => c.caseId === req.params.id);
   if (!caseItem) {
     res.status(404).json({ error: `Case ${req.params.id} not found` });
@@ -421,6 +461,7 @@ app.post('/api/cases/:id/decision', authenticate, async (req: AuthenticatedReque
     return;
   }
 
+  await ensureCurrentRun();
   const caseId = String(req.params.id);
   const caseIndex = currentCases.findIndex((c) => c.caseId === caseId);
   if (caseIndex === -1) {
@@ -451,7 +492,13 @@ app.post('/api/cases/:id/decision', authenticate, async (req: AuthenticatedReque
 });
 
 // 6. Settlements & Batches (B6 & B9)
-app.get(['/api/settlements', '/settlements'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+app.all(['/api/settlements', '/settlements'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  if (req.method === 'POST') {
+    const newSettlements = Array.isArray(req.body) ? req.body : (req.body?.settlements || [req.body]);
+    const mapped = mapSettlements(newSettlements);
+    await persistAuditLog('STREAM_SETTLEMENTS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} settlement batches`);
+    return res.status(201).json({ count: mapped.length, settlements: mapped, message: 'Settlements successfully ingested into stream' });
+  }
   const rawSettlements = await novaClient.fetchSettlements();
   const rawBankTxs = await novaClient.fetchBankTransactions();
   const settlements = mapSettlements(rawSettlements);

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { triggerRun, getHealth } from '../api/reconcile';
+import { triggerRun, getHealth, getLatestRun } from '../api/reconcile';
 import type { ReconRunResult } from '../api/reconcile';
 import { useAuth } from '../context/AuthContext';
 
@@ -25,6 +25,15 @@ export function useReconcile() {
 
   const loadLatest = useCallback(async () => {
     if (!user?.token) return;
+    try {
+      const latest = await getLatestRun(user.token);
+      if (latest && latest.runId) {
+        setRun(latest);
+        return;
+      }
+    } catch {
+      // Fallback to health endpoint
+    }
     try {
       const health = await getHealth(user.token);
       if (health.latestRun) setRun(health.latestRun);

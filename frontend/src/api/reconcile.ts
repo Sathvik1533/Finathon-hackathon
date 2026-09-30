@@ -40,3 +40,11 @@ export async function getHealth(token: string): Promise<{ status: string; latest
   if (!res.ok) throw new Error('Health check failed');
   return res.json();
 }
+
+export async function getLatestRun(token: string): Promise<ReconRunResult> {
+  const res = await fetch(`${API_BASE}/api/reconcile/latest`, {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch latest reconciliation run');
+  return res.json();
+}

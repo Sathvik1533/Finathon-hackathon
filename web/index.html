@@ -209,7 +209,7 @@
         <!-- Metric 1: Total Volume -->
         <div class="bg-white border border-slate-200 rounded-xl p-5 relative overflow-hidden shadow-xs">
           <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Total Ingested Volume</div>
-          <div id="kpi-total-volume" class="text-2xl font-bold text-slate-900 mt-2 mono">₹5,80,000.00</div>
+          <div id="kpi-total-volume" class="text-2xl font-bold text-slate-900 mt-2 mono">₹5,800.00</div>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-slate-500">
             <span class="text-emerald-700 font-semibold" id="kpi-records-count">4 Orders</span>
             <span>across 4 async streams</span>
@@ -219,7 +219,7 @@
         <!-- Metric 2: Net Settled Funds -->
         <div class="bg-white border border-slate-200 rounded-xl p-5 relative overflow-hidden shadow-xs">
           <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Net Bank Settled</div>
-          <div id="kpi-settled-funds" class="text-2xl font-bold text-emerald-600 mt-2 mono">₹4,87,020.00</div>
+          <div id="kpi-settled-funds" class="text-2xl font-bold text-emerald-600 mt-2 mono">₹4,870.20</div>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-slate-500">
             <span class="text-emerald-700 font-medium">Matched 100%</span>
             <span>via UTR-HDFC-99182</span>
@@ -229,7 +229,7 @@
         <!-- Metric 3: Amount at Risk -->
         <div class="bg-white border border-slate-200 rounded-xl p-5 relative overflow-hidden shadow-xs">
           <div class="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Amount at Risk</div>
-          <div id="kpi-amount-at-risk" class="text-2xl font-bold text-amber-600 mt-2 mono">₹78,122.00</div>
+          <div id="kpi-amount-at-risk" class="text-2xl font-bold text-amber-600 mt-2 mono">₹792.92</div>
           <div class="flex items-center gap-1.5 mt-2 text-xs text-slate-500">
             <span class="text-amber-700 font-semibold" id="kpi-exceptions-count">2 Exceptions</span>
             <span>requiring human review</span>
@@ -344,7 +344,7 @@
           </span>
         </div>
         <p class="text-xs text-slate-700 leading-relaxed" id="ai-controller-summary">
-          Reconciliation completed across 4 ingested Nova financial feeds. The deterministic engine verified <span class="text-emerald-700 font-semibold">₹4,87,020.00</span> in settled bank disbursements under batch <span class="mono text-blue-700 font-medium">SETTLE-901</span>. Total amount at risk stands at <span class="text-amber-800 font-semibold">₹78,122.00</span> across 2 distinct exception categories: an un-settled transaction within acceptable T+2 latency (<span class="mono text-slate-900 font-medium">ORD-104</span>: ₹781.12 net) and an over-deducted MDR fee variance on <span class="mono text-slate-900 font-medium">ORD-103</span> requiring vendor dispute under <span class="mono text-blue-700 font-medium">POL_FEE_TOLERANCE §3.2</span>.
+          Reconciliation completed across 4 ingested Nova financial feeds. The deterministic engine verified <span class="text-emerald-700 font-semibold">₹4,870.20</span> in settled bank disbursements under batch <span class="mono text-blue-700 font-medium">SETTLE-901</span>. Total amount at risk stands at <span class="text-amber-800 font-semibold">₹792.92</span> across 2 distinct exception categories: an un-settled transaction within acceptable T+2 latency (<span class="mono text-slate-900 font-medium">ORD-104</span>: ₹781.12 net) and an over-deducted MDR fee variance on <span class="mono text-slate-900 font-medium">ORD-103</span> requiring vendor dispute under <span class="mono text-blue-700 font-medium">POL_FEE_TOLERANCE §3.2</span>.
         </p>
       </div>
 
@@ -465,7 +465,7 @@
             <div class="space-y-1.5 text-xs">
               <div class="flex justify-between"><span class="text-slate-500">Batch ID:</span> <span id="node4-batch" class="mono text-blue-700 font-semibold">SETTLE-901</span></div>
               <div class="flex justify-between"><span class="text-slate-500">Bank UTR:</span> <span id="node4-utr" class="mono text-slate-900 font-semibold">UTR-HDFC-99182</span></div>
-              <div class="flex justify-between"><span class="text-slate-500">Batch Total:</span> <span id="node4-total" class="mono text-emerald-700 font-bold">₹4,87,020.00</span></div>
+              <div class="flex justify-between"><span class="text-slate-500">Batch Total:</span> <span id="node4-total" class="mono text-emerald-700 font-bold">₹4,870.20</span></div>
               <div class="flex justify-between"><span class="text-slate-500">Value Date:</span> <span class="mono text-slate-600 text-[10px]">2026-09-30 (T+2)</span></div>
             </div>
             <div id="node4-note" class="pt-2 border-t border-slate-200 text-[10px] text-emerald-700 font-medium">
@@ -571,7 +571,7 @@
             <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
               <div class="flex justify-between items-center">
                 <span class="font-bold text-slate-900 mono">UTR-HDFC-99182</span>
-                <span class="font-bold text-emerald-700 mono">₹4,87,020.00 CR</span>
+                <span class="font-bold text-emerald-700 mono">₹4,870.20 CR</span>
               </div>
               <div class="text-slate-600 text-[11px] mono bg-white p-2 rounded border border-slate-200 break-all shadow-xs">
                 CMS/NACH/SETTL/SETTLE-901/HDFC0001
@@ -596,15 +596,15 @@
             <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
               <div class="flex justify-between items-center">
                 <span class="font-bold text-slate-900 mono">SETTLE-901</span>
-                <span class="text-xs text-slate-600">Gross: ₹5,00,000.00</span>
+                <span class="text-xs text-slate-600">Gross: ₹5,000.00</span>
               </div>
               <div class="flex justify-between text-xs">
                 <span class="text-slate-500">MDR + GST Deducted:</span>
-                <span class="mono text-rose-700 font-medium">₹12,980.00</span>
+                <span class="mono text-rose-700 font-medium">₹129.80</span>
               </div>
               <div class="flex justify-between text-xs pt-1 border-t border-slate-200">
                 <span class="text-slate-800 font-semibold">Net Payout Transferred:</span>
-                <span class="mono text-emerald-700 font-bold">₹4,87,020.00</span>
+                <span class="mono text-emerald-700 font-bold">₹4,870.20</span>
               </div>
             </div>
           </div>
@@ -668,14 +668,14 @@
           </div>
           <div class="text-right">
             <div class="text-xs text-slate-500">Total Net Bank Credit</div>
-            <div class="text-2xl font-bold text-emerald-600 mono">₹4,87,020.00</div>
+            <div class="text-2xl font-bold text-emerald-600 mono">₹4,870.20</div>
           </div>
         </div>
 
         <div class="space-y-3">
           <div class="text-xs font-semibold text-slate-800 flex items-center justify-between">
             <span>Aggregated Child Orders (3):</span>
-            <span class="text-emerald-700 mono text-xs font-bold">Sum of Net Payments = ₹4,87,020.00 (Zero Drift)</span>
+            <span class="text-emerald-700 mono text-xs font-bold">Sum of Net Payments = ₹4,870.20 (Zero Drift)</span>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -708,7 +708,7 @@
           </div>
 
           <div class="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <span>✓ Mathematical verification: ∑(Child Net Amounts) = Net Settlement Payout = ₹4,87,020.00</span>
+            <span>✓ Mathematical verification: ∑(Child Net Amounts) = Net Settlement Payout = ₹4,870.20</span>
             <span class="mono font-bold bg-white text-emerald-700 px-2 py-0.5 rounded border border-emerald-200">Match Confidence: 100.0%</span>
           </div>
         </div>
@@ -1226,26 +1226,54 @@
       }
     }
 
-    // Download CSV export from /api/report?format=csv
+    // Download CSV export from /api/report?format=csv with local fallback
     async function downloadCsvReport() {
       try {
-        const res = await fetch(`${API_BASE}/api/report?format=csv`, {
-          headers: { 'Authorization': `Bearer ${jwtToken}` }
-        });
-        if (!res.ok) throw new Error('CSV export failed: ' + res.status);
-        const csvText = await res.text();
-        const blob = new Blob([csvText], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'ledgersense-reconciliation-report.csv';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        if (isApiConnected && jwtToken) {
+          const res = await fetch(`${API_BASE}/api/report?format=csv`, {
+            headers: { 'Authorization': `Bearer ${jwtToken}` }
+          });
+          if (res.ok) {
+            const csvText = await res.text();
+            triggerBlobDownload(csvText, 'ledgersense-reconciliation-report.csv');
+            return;
+          }
+        }
       } catch (err) {
+        console.warn('API CSV export unavailable, generating local CSV from active cases:', err);
+      }
+
+      // Client-side dynamic CSV generation fallback
+      try {
+        const header = 'CaseID,OrderID,GatewayRef,Type,AmountAtRisk,Expected,Actual,Status,StageIdentified,Details\n';
+        const rows = (appState.cases || []).map(c => [
+          c.caseId,
+          c.orderId,
+          c.gatewayRef || '',
+          c.discrepancyType,
+          (c.amountAtRisk / 100).toFixed(2),
+          (c.expectedAmount / 100).toFixed(2),
+          (c.actualAmount / 100).toFixed(2),
+          c.status,
+          c.stageIdentified,
+          `"${(c.details || '').replace(/"/g, "'")}"`
+        ].join(',')).join('\n');
+        triggerBlobDownload(header + rows, 'ledgersense-reconciliation-report.csv');
+      } catch (e) {
         alert('CSV export failed. Please run reconciliation first and try again.');
       }
+    }
+
+    function triggerBlobDownload(content, filename) {
+      const blob = new Blob([content], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     }
 
 
@@ -1460,7 +1488,7 @@
           orderId: 'ORD-103',
           gatewayRef: 'gw_tx_003',
           discrepancyType: 'FEE_MISMATCH',
-          amountAtRisk: 1000,
+          amountAtRisk: 1180,
           expectedAmount: 3540,
           actualAmount: 4720,
           status: 'PENDING_REVIEW',
@@ -1486,8 +1514,8 @@
         totalRecordsProcessed: 4,
         matchedCount: 2,
         discrepancyCount: 2,
-        totalSettledPaise: 48702000,
-        totalAmountAtRiskPaise: 79112,
+        totalSettledPaise: 487020,
+        totalAmountAtRiskPaise: 79292,
         cases: appState.cases,
         executedAt: new Date().toISOString()
       };
@@ -1516,7 +1544,7 @@
       ];
 
       appState.bankTxs = [
-        { utr_number: 'UTR-HDFC-99182', amount: 48702000, credit_debit: 'CR', narration: 'CMS/NACH/SETTL/SETTLE-901/HDFC0001', value_date: '2026-09-30' }
+        { utr_number: 'UTR-HDFC-99182', amount: 487020, credit_debit: 'CR', narration: 'CMS/NACH/SETTL/SETTLE-901/HDFC0001', value_date: '2026-09-30' }
       ];
 
       appState.settlements = [
@@ -1524,13 +1552,13 @@
           settlement_id: 'SETTLE-901',
           settlementId: 'SETTLE-901',
           utr_number: 'UTR-HDFC-99182',
-          gross_amount: 50000000,
-          totalGross: 50000000,
-          fee_deductions: 1298000,
-          totalFees: 1100000,
-          totalTax: 198000,
-          net_payout: 48702000,
-          netAmount: 48702000,
+          gross_amount: 500000,
+          totalGross: 500000,
+          fee_deductions: 12980,
+          totalFees: 11000,
+          totalTax: 1980,
+          net_payout: 487020,
+          netAmount: 487020,
           transaction_count: 3,
           orderCount: 3,
           settled_at: '2026-09-30T04:00:00Z',
@@ -1551,13 +1579,43 @@
 
     // Render Metrics
     function renderDashboardMetrics() {
-      const riskTotal = appState.cases
-        .filter(c => c.status === 'PENDING_REVIEW')
-        .reduce((acc, c) => acc + c.amountAtRisk, 0);
+      // 1. Total Ingested Volume
+      const totalVolumePaise = (appState.payments && appState.payments.length > 0)
+        ? appState.payments.reduce((sum, p) => sum + (p.amount || p.amount_paise || 0), 0)
+        : (appState.latestRun?.totalRecordsProcessed ? 580000 : 580000);
+      const totalVolumeEl = document.getElementById('kpi-total-volume');
+      if (totalVolumeEl) {
+        totalVolumeEl.innerText = `₹${(totalVolumePaise / 100).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+      }
+      const recordsCountEl = document.getElementById('kpi-records-count');
+      if (recordsCountEl) {
+        recordsCountEl.innerText = `${(appState.payments && appState.payments.length) || (appState.latestRun?.totalRecordsProcessed) || 4} Orders`;
+      }
 
-      document.getElementById('kpi-amount-at-risk').innerText = `₹${(riskTotal / 100).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
-      document.getElementById('kpi-exceptions-count').innerText = `${appState.cases.filter(c => c.status === 'PENDING_REVIEW').length} Exceptions`;
-      document.getElementById('badge-exception-count').innerText = appState.cases.filter(c => c.status === 'PENDING_REVIEW').length;
+      // 2. Net Bank Settled Funds
+      const settledPaise = (appState.settlements && appState.settlements.length > 0)
+        ? (appState.settlements[0].net_payout || appState.settlements[0].netAmount || 487020)
+        : (appState.latestRun?.totalSettledPaise || 487020);
+      const settledEl = document.getElementById('kpi-settled-funds');
+      if (settledEl) {
+        settledEl.innerText = `₹${(settledPaise / 100).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+      }
+
+      // 3. Amount at Risk
+      const pendingCases = (appState.cases || []).filter(c => c.status === 'PENDING_REVIEW');
+      const riskTotal = pendingCases.reduce((acc, c) => acc + c.amountAtRisk, 0);
+      const riskEl = document.getElementById('kpi-amount-at-risk');
+      if (riskEl) {
+        riskEl.innerText = `₹${(riskTotal / 100).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+      }
+      const exceptionsCountEl = document.getElementById('kpi-exceptions-count');
+      if (exceptionsCountEl) {
+        exceptionsCountEl.innerText = `${pendingCases.length} Exceptions`;
+      }
+      const badgeExceptionCount = document.getElementById('badge-exception-count');
+      if (badgeExceptionCount) {
+        badgeExceptionCount.innerText = pendingCases.length;
+      }
     }
 
     // Render Cases Table
@@ -1959,7 +2017,7 @@
         gross: '₹1,000.00',
         node1: { id: 'ORD-101', gross: '₹1,000.00', time: '2026-09-28 10:00Z' },
         node2: { ref: 'gw_tx_001', fee: '₹20.00 (2.0%)', tax: '₹3.60 (18%)', net: '₹976.40', note: '✓ Contract MDR schedule matches expected ₹23.60' },
-        node4: { batch: 'SETTLE-901', utr: 'UTR-HDFC-99182', total: '₹4,87,020.00', note: '✓ Included in 1:N settlement batch credit' },
+        node4: { batch: 'SETTLE-901', utr: 'UTR-HDFC-99182', total: '₹4,870.20', note: '✓ Included in 1:N settlement batch credit' },
         equation: 'Equation Balanced (Variance: ₹0.00)',
         eqBadgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
         mathExpected: '₹1,000.00 - ₹23.60 = ₹976.40',
@@ -1976,7 +2034,7 @@
         gross: '₹2,500.00',
         node1: { id: 'ORD-102', gross: '₹2,500.00', time: '2026-09-28 10:15Z' },
         node2: { ref: 'gw_tx_002', fee: '₹50.00 (2.0%)', tax: '₹9.00 (18%)', net: '₹2,441.00', note: '✓ Contract MDR schedule matches expected ₹59.00' },
-        node4: { batch: 'SETTLE-901', utr: 'UTR-HDFC-99182', total: '₹4,87,020.00', note: '✓ Included in 1:N settlement batch credit' },
+        node4: { batch: 'SETTLE-901', utr: 'UTR-HDFC-99182', total: '₹4,870.20', note: '✓ Included in 1:N settlement batch credit' },
         equation: 'Equation Balanced (Variance: ₹0.00)',
         eqBadgeClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
         mathExpected: '₹2,500.00 - ₹59.00 = ₹2,441.00',
@@ -1989,12 +2047,12 @@
         verdict: 'FEE_MISMATCH_DETECTED',
         badgeClass: 'bg-amber-50 text-amber-800 border border-amber-200',
         icon: '⚠️',
-        desc: 'Gateway deducted fee of ₹47.20 (Fee ₹40.00 + GST ₹7.20) instead of contracted ₹35.40 (Fee ₹30.00 + GST ₹5.40). Fee leakage: ₹10.00.',
+        desc: 'Gateway deducted fee of ₹47.20 (Fee ₹40.00 + GST ₹7.20) instead of contracted ₹35.40 (Fee ₹30.00 + GST ₹5.40). Fee leakage: ₹11.80.',
         gross: '₹1,500.00',
         node1: { id: 'ORD-103', gross: '₹1,500.00', time: '2026-09-28 11:00Z' },
         node2: { ref: 'gw_tx_003', fee: '₹40.00 (2.67%)', tax: '₹7.20 (18%)', net: '₹1,452.80', note: '⚠️ Overcharged! Contracted MDR is ₹30.00, processor charged ₹40.00' },
-        node4: { batch: 'SETTLE-901', utr: 'UTR-HDFC-99182', total: '₹4,87,020.00', note: '⚠️ Overcharged net payout included in settlement batch' },
-        equation: 'MDR Fee Leakage: ₹10.00 Detected (Stage 4)',
+        node4: { batch: 'SETTLE-901', utr: 'UTR-HDFC-99182', total: '₹4,870.20', note: '⚠️ Overcharged net payout included in settlement batch' },
+        equation: 'MDR Fee Leakage: ₹11.80 Detected (Stage 4)',
         eqBadgeClass: 'bg-amber-50 text-amber-800 border border-amber-200',
         mathExpected: 'Expected Net: ₹1,500.00 - ₹35.40 = ₹1,464.60',
         mathActual: 'Actual Gateway Net: ₹1,452.80 (Deficit ₹11.80)',

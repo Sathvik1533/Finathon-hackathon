@@ -4,10 +4,23 @@ import { KpiCard } from '../components/ui/KpiCard';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ModuleCoverageRow } from '../components/ui/ModuleCoverageRow';
 import { useReport } from '../hooks/useReport';
-import { getCsvDownloadUrl } from '../api/report';
+import { downloadReportCsv, getCsvDownloadUrl } from '../api/report';
 import { useAuth } from '../context/AuthContext';
 
 const MODULE_LABELS: Record<string, string> = {
+  // Hyphenated API keys from /api/report
+  'M1-InternalTransactionRecords': 'M1 · Internal Transaction Records',
+  'M2-PaymentGatewayRecords':      'M2 · Payment Gateway Records',
+  'M3-BankSettlementRecords':      'M3 · Bank Settlement Records',
+  'M4-TransactionIDMatching':      'M4 · Transaction-ID Matching',
+  'M5-ReferenceMatching':          'M5 · Reference Matching',
+  'M6-PartialMatching':            'M6 · Partial Matching',
+  'M7-FeeCalculation':             'M7 · Fee Calculation',
+  'M8-RefundReversalHandling':     'M8 · Refund/Reversal Handling',
+  'M9-SettlementMatching':         'M9 · Settlement Matching',
+  'M10-ExceptionManagement':       'M10 · Exception Management',
+  'M11-ReconciliationReport':      'M11 · Reconciliation Report',
+  // CamelCase aliases
   internalTransactionRecords: 'M1 · Internal Transaction Records',
   paymentGatewayRecords:      'M2 · Payment Gateway Records',
   bankSettlementRecords:      'M3 · Bank Settlement Records',
@@ -27,13 +40,29 @@ export const ReportPage: React.FC = () => {
 
   useEffect(() => { refresh(); }, []);
 
-  const handleCsvDownload = () => {
+  const handleCsvDownload = async () => {
     if (!user?.token) return;
-    const url = getCsvDownloadUrl();
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'ledgersense-reconciliation-report.csv';
-    a.click();
+    try {
+      const csvText = await downloadReportCsv(user.token);
+      const blob = new Blob([csvText], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ledgersense-${report?.reportId || 'report'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback to token query link
+      const fallbackUrl = getCsvDownloadUrl(user.token);
+      const a = document.createElement('a');
+      a.href = fallbackUrl;
+      a.download = `ledgersense-${report?.reportId || 'report'}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   return (
@@ -96,14 +125,26 @@ export const ReportPage: React.FC = () => {
               </h3>
             </div>
             <div className="divide-y divide-slate-100">
-              {Object.entries(report.moduleCoverage).map(([key, cov]: [string, any]) => (
-                <ModuleCoverageRow
-                  key={key}
-                  label={MODULE_LABELS[key] ?? key}
-                  status={cov.status}
-                  detail={cov.method ?? cov.algorithm ?? cov.stage?.toString()}
-                />
-              ))}
+              {Object.entries(report.moduleCoverage).map(([key, cov]: [string, any]) => {
+                let detail = cov.method ?? cov.algorithm;
+                if (!detail && cov.stage !== undefined) {
+                  detail = `Stage ${cov.stage}${cov.schedule ? ` (${cov.schedule})` : ''}`;
+                } else if (!detail && cov.recordCount !== undefined) {
+                  detail = `${cov.recordCount} records ingested`;
+                } else if (!detail && cov.reportId) {
+                  detail = cov.reportId;
+                } else if (!detail && cov.schedule) {
+                  detail = cov.schedule;
+                }
+                return (
+                  <ModuleCoverageRow
+                    key={key}
+                    label={MODULE_LABELS[key] ?? key}
+                    status={cov.status}
+                    detail={detail ?? 'Verified'}
+                  />
+                );
+              })}
             </div>
           </div>
 

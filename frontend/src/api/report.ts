@@ -7,6 +7,7 @@ export interface ModuleCoverage {
   recordCount?: number;
   algorithm?: string;
   reportId?: string;
+  schedule?: string;
 }
 
 export interface ReportData {
@@ -47,6 +48,15 @@ export async function getReport(token: string): Promise<ReportData> {
   return res.json();
 }
 
-export function getCsvDownloadUrl(): string {
-  return `${API_BASE}/api/report?format=csv`;
+export async function downloadReportCsv(token: string): Promise<string> {
+  const res = await fetch(`${API_BASE}/api/report?format=csv`, {
+    headers: authHeader(token),
+  });
+  if (!res.ok) throw new Error('Failed to fetch CSV: ' + res.status);
+  return res.text();
+}
+
+export function getCsvDownloadUrl(token?: string): string {
+  const base = `${API_BASE}/api/report?format=csv`;
+  return token ? `${base}&token=${encodeURIComponent(token)}` : base;
 }

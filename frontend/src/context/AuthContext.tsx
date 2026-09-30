@@ -24,18 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // ignore
     }
-    // Seamless default demo user for instant live evaluation
-    const defaultDemoUser: AuthUser = {
-      token: 'jwt-demo-session-token',
-      username: 'priya',
-      role: 'FINOPS_ADMIN',
-    };
-    try {
-      localStorage.setItem('ledgersense_auth', JSON.stringify(defaultDemoUser));
-    } catch {
-      // ignore
-    }
-    return defaultDemoUser;
+    return null;
   });
 
   const login = async (username: string, password: string) => {

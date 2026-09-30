@@ -7,7 +7,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "tsc && node dist/test_api.js",
-    "test:e2e": "tsc && node dist/test_e2e_integration.js"
+    "test:e2e": "tsc && node dist/test_e2e_integration.js",
+    "test:nova": "tsc && node dist/test_nova_client.js",
+    "test:system": "tsc && node dist/test_full_system.js"
   },
   "keywords": [],
   "author": "",

@@ -6,39 +6,34 @@ export interface LoginResponse {
 }
 
 export async function login(username: string, password: string): Promise<LoginResponse> {
+  let response: Response;
   try {
-    const res = await fetch(`${API_BASE}/api/auth/login`, {
+    response = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
     });
+  } catch (err: any) {
+    throw new Error(`Authentication server unreachable (${API_BASE || 'origin'}). Please verify backend connection.`);
+  }
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.token) {
-        return data;
+  if (!response.ok) {
+    let errMessage = 'Invalid username or password.';
+    try {
+      const errData = await response.json();
+      if (errData && errData.error) {
+        errMessage = errData.error;
       }
+    } catch {
+      // ignore
     }
-  } catch (err) {
-    console.warn('[Auth] Remote login server unavailable, evaluating credentials against fallback policy', err);
+    throw new Error(errMessage);
   }
 
-  // Resilient fallback policy for seamless evaluation and offline resilience
-  if (
-    (username === 'admin' && (password === 'admin123' || password === 'password123')) ||
-    (username === 'reviewer' && password === 'reviewer123') ||
-    username === 'priya'
-  ) {
-    return {
-      token: `demo-jwt-session-${Date.now()}`,
-      user: {
-        username: username === 'priya' ? 'priya' : username,
-        role: username === 'reviewer' ? 'reviewer' : 'admin',
-        userId: `usr_${username}_001`,
-        merchantId: 'MERCH_ACME_INDIA',
-      },
-    };
+  const data = await response.json();
+  if (!data || !data.token) {
+    throw new Error('Authentication failed: Missing JWT token in response.');
   }
 
-  throw new Error('Invalid credentials. Please use admin / admin123 or reviewer / reviewer123');
+  return data;
 }

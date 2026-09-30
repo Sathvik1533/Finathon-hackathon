@@ -24,91 +24,85 @@ export interface ReconRunResult {
   executedAt: string;
 }
 
-const BASELINE_RUN: ReconRunResult = {
-  runId: 'RUN-PRODUCTION-FIN11',
-  totalRecordsProcessed: 4,
-  matchedCount: 2,
-  discrepancyCount: 2,
-  totalSettledPaise: 487020,
-  totalAmountAtRiskPaise: 79292,
-  executedAt: new Date().toISOString(),
-  cases: [
-    {
-      caseId: 'CASE-001',
-      orderId: 'ORD-103',
-      gatewayRef: 'gw_tx_003',
-      discrepancyType: 'FEE_MISMATCH',
-      amountAtRisk: 1000,
-      expectedAmount: 3000,
-      actualAmount: 4000,
-      status: 'PENDING_REVIEW',
-      details: 'Stage 4: Gateway charged fee Rs 40.00 vs contract schedule Rs 30.00 (Rs 10.00 leak)',
-      stageIdentified: 4,
-    },
-    {
-      caseId: 'CASE-002',
-      orderId: 'ORD-104',
-      gatewayRef: 'gw_tx_004',
-      discrepancyType: 'TIMING_LAG',
-      amountAtRisk: 78112,
-      expectedAmount: 78112,
-      actualAmount: 0,
-      status: 'PENDING_REVIEW',
-      details: 'Stage 6: Transaction authorized within normal T+2 settlement window',
-      stageIdentified: 6,
-    },
-  ],
-};
+export interface ReconcileAnalyticsSeries {
+  key: string;
+  label: string;
+  volumePaise: number;
+  orderCount: number;
+  matchedCount: number;
+}
 
-let latestLocalRun = { ...BASELINE_RUN };
+export interface ReconcileAnalyticsResult {
+  period: string;
+  range: string;
+  totalVolumePaise: number;
+  totalOrders: number;
+  series: ReconcileAnalyticsSeries[];
+}
 
 export async function triggerRun(token: string): Promise<ReconRunResult> {
-  try {
-    const res = await fetch(`${API_BASE}/api/reconcile/run`, {
-      method: 'POST',
-      headers: authHeader(token),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      latestLocalRun = data;
-      return data;
+  const res = await fetch(`${API_BASE}/api/reconcile/run`, {
+    method: 'POST',
+    headers: authHeader(token),
+  });
+
+  if (!res.ok) {
+    let msg = `Reconciliation run failed with HTTP ${res.status}`;
+    try {
+      const err = await res.json();
+      if (err?.error) msg = err.error;
+    } catch {
+      // ignore
     }
-  } catch {
-    console.warn('[Reconcile] Remote API unreachable, running deterministic engine locally');
+    throw new Error(msg);
   }
 
-  latestLocalRun = {
-    ...BASELINE_RUN,
-    runId: `RUN-${Date.now().toString(36).toUpperCase()}`,
-    executedAt: new Date().toISOString(),
-  };
-  return latestLocalRun;
+  return res.json();
 }
 
-export async function getHealth(token: string): Promise<{ status: string; latestRun?: ReconRunResult }> {
-  try {
-    const res = await fetch(`${API_BASE}/api/health`, {
-      headers: authHeader(token),
-    });
-    if (res.ok) {
-      return res.json();
-    }
-  } catch {
-    // fallback
+export async function getLatestRun(token: string): Promise<ReconRunResult | null> {
+  const res = await fetch(`${API_BASE}/api/reconcile/latest`, {
+    headers: authHeader(token),
+  });
+
+  if (res.status === 404) {
+    return null;
   }
-  return { status: 'healthy', latestRun: latestLocalRun };
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch latest run: HTTP ${res.status}`);
+  }
+
+  return res.json();
 }
 
-export async function getLatestRun(token: string): Promise<ReconRunResult> {
-  try {
-    const res = await fetch(`${API_BASE}/api/reconcile/latest`, {
-      headers: authHeader(token),
-    });
-    if (res.ok) {
-      return res.json();
-    }
-  } catch {
-    // fallback
+export async function getReconcileAnalytics(
+  token: string,
+  period: 'monthly' | 'annually' = 'monthly',
+  range = 'all',
+  startDate?: string,
+  endDate?: string
+): Promise<ReconcileAnalyticsResult> {
+  const params = new URLSearchParams({ period, range });
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+
+  const res = await fetch(`${API_BASE}/api/reconcile/analytics?${params.toString()}`, {
+    headers: authHeader(token),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch reconciliation analytics: HTTP ${res.status}`);
   }
-  return latestLocalRun;
+
+  return res.json();
+}
+
+export async function getHealth(token?: string): Promise<any> {
+  const headers = token ? authHeader(token) : { 'Content-Type': 'application/json' };
+  const res = await fetch(`${API_BASE}/api/health`, { headers });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch health status: HTTP ${res.status}`);
+  }
+  return res.json();
 }

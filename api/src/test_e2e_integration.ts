@@ -1,6 +1,7 @@
 import app, { mapPayments, mapGatewayTxs, mapBankTxs, mapSettlements } from './server';
 import { loginUser, generateToken } from './auth';
 import { reconEngine } from './reconEngine';
+import { setupTestFixtures } from './test_fixtures';
 
 function createMockResponse(onEnd: (status: number, data: any, headers?: Record<string, string>) => void) {
   let statusCode = 200;
@@ -29,6 +30,7 @@ function createMockResponse(onEnd: (status: number, data: any, headers?: Record<
 }
 
 async function runE2E() {
+  setupTestFixtures();
   console.log('=== FIN-11 END-TO-END PAYMENT RECONCILIATION VERIFICATION ===');
 
   // Step 1: Authentication & JWT Session
@@ -251,15 +253,12 @@ async function runE2E() {
     (app as any).handle({ method: 'GET', url: '/api/report?format=csv', headers: { authorization: `Bearer ${token}` }, query: { format: 'csv' } }, mockRes);
   });
 
-  // Test direct browser CSV download with token in query parameter (no Authorization header)
+  // Verify query string tokens are strictly rejected with 401 (Prevent URL token leakage)
   await new Promise<void>((resolve, reject) => {
-    const mockRes = createMockResponse((status, data, headers) => {
+    const mockRes = createMockResponse((status, data) => {
       try {
-        if (status !== 200) throw new Error(`Query param CSV download failed: ${status}`);
-        if (!data.includes('CaseID,OrderID,GatewayRef,Type,AmountAtRisk')) {
-          throw new Error('CSV content invalid');
-        }
-        console.log('  ✓ Direct browser CSV export authenticated via URL query token (?format=csv&token=...)');
+        if (status !== 401) throw new Error(`Query token should be rejected with 401, got: ${status}`);
+        console.log('  ✓ Query parameter token (?token=...) correctly rejected with 401 (URL token leakage prevention verified)');
         resolve();
       } catch (e) {
         reject(e);

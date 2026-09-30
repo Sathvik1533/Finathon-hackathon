@@ -1,19 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { PageShell } from '../components/layout/PageShell';
-import { syncNova } from '../api/nova';
-import type { NovaSyncResponse } from '../api/nova';
+import { syncNova, getNovaStatus } from '../api/nova';
+import type { NovaSyncResponse, NovaStatusResponse } from '../api/nova';
 import { useAuth } from '../context/AuthContext';
-import { buttonPressProps, cardHoverProps, itemFadeInVariants } from '../utils/motion';
+import { buttonPressProps, itemFadeInVariants } from '../utils/motion';
 
 const paise = (v: number) => `₹${(v / 100).toFixed(2)}`;
 
 export const NovaExplorerPage: React.FC = () => {
   const { user } = useAuth();
   const [data, setData] = useState<NovaSyncResponse | null>(null);
+  const [status, setStatus] = useState<NovaStatusResponse | null>(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'payments' | 'gateway' | 'bank' | 'settlements'>('payments');
+
+  const checkConnection = async (live = false) => {
+    try {
+      setCheckingStatus(true);
+      const res = await getNovaStatus(live);
+      setStatus(res);
+    } catch (err) {
+      console.warn('Failed to query Nova status:', err);
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
+
+  useEffect(() => {
+    checkConnection(false);
+  }, []);
 
   const handleSync = async () => {
     if (!user?.token) return;
@@ -22,6 +40,7 @@ export const NovaExplorerPage: React.FC = () => {
     try {
       const result = await syncNova(user.token);
       setData(result);
+      await checkConnection(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sync failed');
     } finally {
@@ -39,19 +58,84 @@ export const NovaExplorerPage: React.FC = () => {
   return (
     <PageShell
       title="Aczen Nova 4-Source Explorer"
-      subtitle="Live multi-source financial feeds connecting ERP, Payment Gateway, Bank Clearing, and Settlements"
+      subtitle="Multi-source financial data ingestion connecting ERP, Payment Gateway, Bank Statements, and Settlements"
       actions={
-        <motion.button
-          {...buttonPressProps}
-          onClick={handleSync}
-          disabled={loading}
-          className="bg-[#006241] hover:bg-[#004e34] text-white rounded-full px-5 py-2.5 text-xs font-semibold shadow-pill transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-        >
-          <span>⟳</span>
-          <span>{loading ? 'Syncing...' : 'Sync Nova Feeds'}</span>
-        </motion.button>
+        <div className="flex items-center gap-2">
+          <motion.button
+            {...buttonPressProps}
+            onClick={() => checkConnection(true)}
+            disabled={checkingStatus}
+            className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full px-4 py-2 text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+          >
+            <span>{checkingStatus ? 'Pinging...' : 'Test Connection'}</span>
+          </motion.button>
+          <motion.button
+            {...buttonPressProps}
+            onClick={handleSync}
+            disabled={loading}
+            className="bg-[#006241] hover:bg-[#004e34] text-white rounded-full px-5 py-2.5 text-xs font-semibold shadow-pill transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+          >
+            <span>⟳</span>
+            <span>{loading ? 'Syncing...' : 'Sync Nova Feeds'}</span>
+          </motion.button>
+        </div>
       }
     >
+      {/* Truthful Connection Status Banner */}
+      {status && (
+        <div className="mb-5 bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${status.reachable ? 'bg-[#00c070]' : 'bg-rose-500'}`} />
+              <span className="text-xs font-bold text-slate-900">Aczen Nova Provider Status</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                Mode: {status.mode}
+              </span>
+            </div>
+            <div className="text-[11px] font-mono text-slate-400">
+              Last Verified: {status.lastChecked ? new Date(status.lastChecked).toLocaleTimeString() : 'Recent'}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="text-[10px] text-slate-400 uppercase font-semibold">Reachability</div>
+              <div className={`font-bold mt-0.5 ${status.reachable ? 'text-[#006241]' : 'text-rose-600'}`}>
+                {status.reachable ? '● Reachable' : '○ Offline'}
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="text-[10px] text-slate-400 uppercase font-semibold">Credentials</div>
+              <div className={`font-bold mt-0.5 ${status.configured ? 'text-[#006241]' : 'text-amber-600'}`}>
+                {status.configured ? '● Key Configured' : '○ Key Missing'}
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="text-[10px] text-slate-400 uppercase font-semibold">Authentication</div>
+              <div className={`font-bold mt-0.5 ${status.authenticated ? 'text-[#006241]' : 'text-slate-600'}`}>
+                {status.authenticated ? '● Authenticated' : '○ Unauthenticated'}
+              </div>
+            </div>
+
+            <div className="p-2 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="text-[10px] text-slate-400 uppercase font-semibold">Provenance Slice</div>
+              <div className="font-mono font-bold text-slate-800 mt-0.5 truncate">
+                {status.teamSlot || 'team-1533'}
+              </div>
+            </div>
+          </div>
+
+          {!status.configured && (
+            <div className="text-[11px] text-amber-800 bg-amber-50/80 border border-amber-200/80 rounded-xl p-2.5">
+              <strong>Notice:</strong> Server is running without <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">NOVA_API_KEY</code>.
+              Preflight check verifies endpoint reachability. Provide an authorized key to ingest live external feeds; the system safely isolates test records until credentials are authenticated.
+            </div>
+          )}
+        </div>
+      )}
+
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}

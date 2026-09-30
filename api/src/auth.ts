@@ -23,8 +23,6 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.split(' ')[1];
-  } else if (typeof req.query?.token === 'string') {
-    token = req.query.token;
   }
 
   if (!token) {

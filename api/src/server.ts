@@ -123,27 +123,30 @@ export function mapSettlements(settlements: any[]) {
 (async function init() {
   try {
     await initDatabaseSchema();
-    const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
-      novaClient.fetchPayments(),
-      novaClient.fetchGatewayTransactions(),
-      novaClient.fetchBankTransactions(),
-      novaClient.fetchSettlements(),
-    ]);
-    latestRun = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
-    currentCases = [...latestRun.cases];
-    auditLogs.unshift(createAuditRecord({
-      action: 'SYSTEM_BOOTSTRAP_INITIALIZED',
-      runId: latestRun.runId,
-      discrepancies: latestRun.discrepancyCount,
-      amountAtRisk: latestRun.totalAmountAtRiskPaise,
-      user: 'system@ledgersense.internal',
-    }));
-    await persistReconRun(latestRun);
-    await persistAuditLog('SYSTEM_BOOTSTRAP_INITIALIZED', 'system@ledgersense.internal', `Bootstrap run ${latestRun.runId}`, latestRun.runId);
-    await redisCache.setLatestRunSummary(latestRun);
-    await redisCache.cacheRunSummary(latestRun.runId, latestRun);
+    const status = novaClient.getStatus();
+    if (status.configured) {
+      const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
+        novaClient.fetchPayments(),
+        novaClient.fetchGatewayTransactions(),
+        novaClient.fetchBankTransactions(),
+        novaClient.fetchSettlements(),
+      ]);
+      latestRun = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
+      currentCases = [...latestRun.cases];
+      auditLogs.unshift(createAuditRecord({
+        action: 'SYSTEM_BOOTSTRAP_INITIALIZED',
+        runId: latestRun.runId,
+        discrepancies: latestRun.discrepancyCount,
+        amountAtRisk: latestRun.totalAmountAtRiskPaise,
+        user: 'system@ledgersense.internal',
+      }));
+      await persistReconRun(latestRun);
+      await persistAuditLog('SYSTEM_BOOTSTRAP_INITIALIZED', 'system@ledgersense.internal', `Bootstrap run ${latestRun.runId}`, latestRun.runId);
+      await redisCache.setLatestRunSummary(latestRun);
+      await redisCache.cacheRunSummary(latestRun.runId, latestRun);
+    }
   } catch (err) {
-    console.error('Initialization error:', err);
+    console.warn('Bootstrap initialization notice:', err);
   }
 })();
 
@@ -259,11 +262,28 @@ app.get('/api/auth/me', authenticate, (req: AuthenticatedRequest, res: Response)
 });
 
 // 3. Nova Accounting API Feeds (B12: 4-Source Real Ingestion)
-app.get('/api/nova/status', (req: Request, res: Response) => {
+app.get('/api/nova/status', async (req: Request, res: Response) => {
+  const check = req.query.check === 'true';
+  if (check) {
+    await novaClient.checkReachability();
+    if (novaClient.getStatus().configured) {
+      await novaClient.checkAuthentication();
+    }
+  }
   res.json(novaClient.getStatus());
 });
 
-app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+app.all(['/api/nova/sync', '/api/sync', '/api/nova/import'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const status = novaClient.getStatus();
+  if (!status.configured) {
+    res.status(401).json({
+      error: 'NOVA_API_KEY is not configured on this server. Provider authentication requires a valid key.',
+      code: 'CREDENTIAL_REQUIRED',
+      status,
+    });
+    return;
+  }
+
   try {
     const [rawPayments, rawGatewayTxs, rawBankTxs, rawSettlements] = await Promise.all([
       novaClient.fetchPayments(),
@@ -277,14 +297,27 @@ app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: Authenticated
     const bankTransactions = mapBankTxs(rawBankTxs);
     const settlements = mapSettlements(rawSettlements);
 
+    const run = reconEngine.runReconciliation(payments, gatewayTransactions, bankTransactions, settlements);
+    latestRun = run;
+    currentCases = run.cases;
+    await persistReconRun(run);
+    await persistAuditLog('NOVA_IMPORT_COMPLETED', req.user?.username || 'admin', `Imported ${payments.length} orders, Run ${run.runId}`, run.runId);
+    await redisCache.setLatestRunSummary(run);
+    novaClient.setLastImport({
+      timestamp: new Date().toISOString(),
+      recordsCount: payments.length + gatewayTransactions.length + bankTransactions.length + settlements.length,
+      runId: run.runId,
+    });
+
     auditLogs.unshift(createAuditRecord({
       action: 'NOVA_FEED_SYNC',
       user: req.user?.username,
       records: payments.length + gatewayTransactions.length + bankTransactions.length + settlements.length,
+      runId: run.runId,
     }));
 
     res.json({
-      message: 'Nova financial data streams ingested successfully',
+      message: 'Nova financial data streams ingested and reconciled successfully',
       counts: {
         payments: payments.length,
         gatewayTransactions: gatewayTransactions.length,
@@ -296,14 +329,20 @@ app.all(['/api/nova/sync', '/api/sync'], authenticate, async (req: Authenticated
       bankTransactions,
       settlements,
       syncedAt: new Date().toISOString(),
-      source: 'Aczen Nova Financial API',
-      sample: {
-        payments: payments.slice(0, 2),
-        gatewayTransactions: gatewayTransactions.slice(0, 2),
+      source: status.mode === 'test_fixture' ? 'Synthetic Test Fixture' : 'Aczen Nova Financial API',
+      provenance: {
+        teamSlot: status.teamSlot || 'fin11-default',
+        datasetSlice: status.datasetSlice || 'inr-default',
+        runId: run.runId,
       },
+      run,
     });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to ingest Nova streams', details: err.message });
+    res.status(err.status || 500).json({
+      error: 'Failed to ingest Nova streams',
+      code: err.code || 'NOVA_INGESTION_FAILED',
+      details: err.message,
+    });
   }
 });
 
@@ -389,15 +428,22 @@ app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, r
 
 export async function ensureCurrentRun(): Promise<void> {
   if (currentCases.length === 0 || !latestRun) {
-    const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
-      novaClient.fetchPayments(),
-      novaClient.fetchGatewayTransactions(),
-      novaClient.fetchBankTransactions(),
-      novaClient.fetchSettlements(),
-    ]);
-    latestRun = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
-    currentCases = [...latestRun.cases];
-    await redisCache.setLatestRunSummary(latestRun);
+    const status = novaClient.getStatus();
+    if (status.configured) {
+      try {
+        const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
+          novaClient.fetchPayments(),
+          novaClient.fetchGatewayTransactions(),
+          novaClient.fetchBankTransactions(),
+          novaClient.fetchSettlements(),
+        ]);
+        latestRun = reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
+        currentCases = [...latestRun.cases];
+        await redisCache.setLatestRunSummary(latestRun);
+      } catch (err: any) {
+        console.warn('ensureCurrentRun fetch notice:', err.message);
+      }
+    }
   }
 }
 
@@ -428,6 +474,116 @@ app.get('/api/reconcile/summary/:runId', authenticate, async (req: Authenticated
     return;
   }
   res.status(404).json({ error: `Run summary for ${runId} not found` });
+});
+
+// Dynamic Settlement Volume & Velocity analytics for date filtering and bucketed period charts
+app.get('/api/reconcile/analytics', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  await ensureCurrentRun();
+  const period = String(req.query.period || 'monthly').toLowerCase();
+  const range = String(req.query.range || 'all');
+  const startDateStr = req.query.startDate as string;
+  const endDateStr = req.query.endDate as string;
+
+  let rawPayments: any[] = [];
+  try {
+    if (novaClient.getStatus().configured) {
+      rawPayments = await novaClient.fetchPayments();
+    }
+  } catch {
+    // Unconfigured or network error
+  }
+
+  let filtered = [...rawPayments];
+  if (startDateStr) {
+    const start = new Date(startDateStr).getTime();
+    if (!isNaN(start)) filtered = filtered.filter(p => new Date(p.created_at).getTime() >= start);
+  }
+  if (endDateStr) {
+    const end = new Date(endDateStr).getTime();
+    if (!isNaN(end)) filtered = filtered.filter(p => new Date(p.created_at).getTime() <= end);
+  } else if (range === 'today') {
+    const today = new Date().toISOString().slice(0, 10);
+    filtered = filtered.filter(p => p.created_at?.startsWith(today));
+  } else if (range === '7d') {
+    const sevenDaysAgo = Date.now() - 7 * 86400000;
+    filtered = filtered.filter(p => new Date(p.created_at).getTime() >= sevenDaysAgo);
+  }
+
+  const buckets: Record<string, { label: string; volumePaise: number; orderCount: number; matchedCount: number }> = {};
+  for (const pay of filtered) {
+    const d = new Date(pay.created_at || Date.now());
+    let bKey = '';
+    let bLabel = '';
+    if (period === 'annually') {
+      bKey = `${d.getFullYear()}`;
+      bLabel = `${d.getFullYear()}`;
+    } else {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      bKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      bLabel = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+    }
+    if (!buckets[bKey]) buckets[bKey] = { label: bLabel, volumePaise: 0, orderCount: 0, matchedCount: 0 };
+    buckets[bKey].volumePaise += pay.amount || 0;
+    buckets[bKey].orderCount += 1;
+    const hasDiscrepancy = currentCases.some(c => c.orderId === pay.order_id && c.status === 'PENDING_REVIEW');
+    if (!hasDiscrepancy) buckets[bKey].matchedCount += 1;
+  }
+
+  const series = Object.entries(buckets).map(([key, data]) => ({
+    key,
+    label: data.label,
+    volumePaise: data.volumePaise,
+    orderCount: data.orderCount,
+    matchedCount: data.matchedCount,
+  }));
+
+  const totalVolumePaise = series.reduce((sum, s) => sum + s.volumePaise, 0);
+  const totalOrders = series.reduce((sum, s) => sum + s.orderCount, 0);
+
+  res.json({
+    period,
+    range,
+    totalVolumePaise,
+    totalOrders,
+    series,
+  });
+});
+
+// Real Notification Center with Read Tracking
+const readNotificationIds = new Set<string>();
+
+app.get('/api/notifications', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  await ensureCurrentRun();
+  const alerts = currentCases.map((c) => {
+    const isFee = c.discrepancyType === 'FEE_MISMATCH';
+    return {
+      id: c.caseId,
+      caseId: c.caseId,
+      orderId: c.orderId,
+      type: c.discrepancyType,
+      title: isFee ? `Fee Mismatch on ${c.orderId}` : `Timing Lag on ${c.orderId}`,
+      detail: c.details,
+      amountPaise: c.amountAtRisk,
+      target: isFee ? `/exceptions` : `/timeline?order=${c.orderId}`,
+      createdAt: latestRun?.executedAt || new Date().toISOString(),
+      read: readNotificationIds.has(c.caseId) || c.status !== 'PENDING_REVIEW',
+    };
+  });
+  const unreadCount = alerts.filter(a => !a.read).length;
+  res.json({
+    unreadCount,
+    notifications: alerts,
+  });
+});
+
+app.post('/api/notifications/read', authenticate, (req: AuthenticatedRequest, res: Response) => {
+  const { id } = req.body;
+  if (id) {
+    readNotificationIds.add(String(id));
+  } else {
+    currentCases.forEach(c => readNotificationIds.add(c.caseId));
+  }
+  res.json({ success: true, readCount: readNotificationIds.size });
 });
 
 

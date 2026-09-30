@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { buttonPressProps } from '../../utils/motion';
+import { getNotifications, markNotificationsRead, NotificationItem } from '../../api/notifications';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -34,7 +35,58 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isMerchantProfileOpen, setIsMerchantProfileOpen] = useState(false);
-  const [unreadAlerts, setUnreadAlerts] = useState(2);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadAlerts, setUnreadAlerts] = useState<number>(0);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState<boolean>(false);
+
+  const loadNotifications = async () => {
+    if (!user?.token) {
+      setNotifications([]);
+      setUnreadAlerts(0);
+      return;
+    }
+    try {
+      setIsLoadingNotifications(true);
+      const data = await getNotifications(user.token);
+      setNotifications(data.notifications || []);
+      setUnreadAlerts(data.unreadCount || 0);
+    } catch (err) {
+      console.warn('Notifications not yet populated from backend:', err);
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 20000);
+    return () => clearInterval(interval);
+  }, [user?.token]);
+
+  const handleMarkAllRead = async () => {
+    if (!user?.token) return;
+    try {
+      await markNotificationsRead(undefined, user.token);
+      setUnreadAlerts(0);
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch (err) {
+      console.error('Failed to mark all notifications read:', err);
+    }
+  };
+
+  const handleNotificationClick = async (item: NotificationItem) => {
+    if (!item.read && user?.token) {
+      try {
+        await markNotificationsRead(item.id, user.token);
+        setNotifications(prev => prev.map(n => (n.id === item.id ? { ...n, read: true } : n)));
+        setUnreadAlerts(prev => Math.max(0, prev - 1));
+      } catch (err) {
+        console.error('Failed to mark notification read:', err);
+      }
+    }
+    setIsNotificationsOpen(false);
+    navigate(item.target);
+  };
 
   // Keyboard shortcut Cmd+K or Ctrl+K for search
   useEffect(() => {
@@ -59,8 +111,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   );
 
   const handleSignOut = () => {
+    setIsMerchantProfileOpen(false);
+    setIsNotificationsOpen(false);
     logout();
-    navigate('/login');
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -171,13 +225,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-slate-900">Reconciliation Alerts</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 font-bold border border-rose-200">
-                        {unreadAlerts} Actionable
-                      </span>
+                      {unreadAlerts > 0 ? (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 font-bold border border-rose-200">
+                          {unreadAlerts} Actionable
+                        </span>
+                      ) : (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
+                          All Cleared
+                        </span>
+                      )}
                     </div>
                     {unreadAlerts > 0 && (
                       <button
-                        onClick={() => setUnreadAlerts(0)}
+                        onClick={handleMarkAllRead}
                         className="text-[10px] font-semibold text-[#006241] hover:underline cursor-pointer"
                       >
                         Mark all read
@@ -186,65 +246,48 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   </div>
 
                   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    {/* Notification 1 */}
-                    <div
-                      onClick={() => {
-                        setIsNotificationsOpen(false);
-                        navigate('/exceptions');
-                      }}
-                      className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/80 hover:bg-amber-100/60 transition-all cursor-pointer space-y-1"
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-amber-900 flex items-center gap-1.5">
-                          <span>⚠️</span> Fee Leakage on ORD-103
-                        </span>
-                        <span className="text-[10px] font-mono text-amber-700">2m ago</span>
+                    {isLoadingNotifications ? (
+                      <div className="py-6 text-center text-xs text-slate-400">Loading alerts...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-slate-400">
+                        No pending alerts. All transactions reconciled.
                       </div>
-                      <p className="text-[11px] text-amber-800 leading-snug">
-                        Gateway charged ₹47.20 vs contract fee ₹35.40. ₹11.80 flagged for dispute.
-                      </p>
-                      <div className="text-[10px] font-bold text-[#006241] pt-1">Review in Exceptions Queue →</div>
-                    </div>
-
-                    {/* Notification 2 */}
-                    <div
-                      onClick={() => {
-                        setIsNotificationsOpen(false);
-                        navigate('/timeline?order=ORD-104');
-                      }}
-                      className="p-3 rounded-2xl bg-blue-50/70 border border-blue-200/80 hover:bg-blue-100/60 transition-all cursor-pointer space-y-1"
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-blue-900 flex items-center gap-1.5">
-                          <span>⏳</span> Timing Lag on ORD-104
-                        </span>
-                        <span className="text-[10px] font-mono text-blue-700">14m ago</span>
-                      </div>
-                      <p className="text-[11px] text-blue-800 leading-snug">
-                        Transaction authorized within T+2 banking window. In-flight pending clearing.
-                      </p>
-                      <div className="text-[10px] font-bold text-[#006241] pt-1">Inspect Timeline Trace →</div>
-                    </div>
-
-                    {/* Notification 3 */}
-                    <div
-                      onClick={() => {
-                        setIsNotificationsOpen(false);
-                        navigate('/settlement');
-                      }}
-                      className="p-3 rounded-2xl bg-[#e6f7ef] border border-[#c1ebd5] hover:bg-emerald-100/60 transition-all cursor-pointer space-y-1"
-                    >
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-[#006241] flex items-center gap-1.5">
-                          <span>✅</span> Batch SETTLE-901 Cleared
-                        </span>
-                        <span className="text-[10px] font-mono text-emerald-700">1h ago</span>
-                      </div>
-                      <p className="text-[11px] text-[#006241] leading-snug">
-                        ₹4,870.20 credited by HDFC Bank UTR. Zero penny rounding drift verified.
-                      </p>
-                      <div className="text-[10px] font-bold text-[#006241] pt-1">View 1:N Settlement Matcher →</div>
-                    </div>
+                    ) : (
+                      notifications.map(item => (
+                        <div
+                          key={item.id}
+                          onClick={() => handleNotificationClick(item)}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer space-y-1 ${
+                            item.read
+                              ? 'bg-slate-50 border-slate-200 text-slate-600 opacity-75'
+                              : item.type === 'FEE_MISMATCH'
+                              ? 'bg-amber-50/80 border-amber-200 hover:bg-amber-100/70'
+                              : 'bg-blue-50/80 border-blue-200 hover:bg-blue-100/70'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold flex items-center gap-1.5 text-slate-900">
+                              <span>{item.type === 'FEE_MISMATCH' ? '⚠️' : '⏳'}</span>
+                              <span>{item.title}</span>
+                              {!item.read && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#006241]" />
+                              )}
+                            </span>
+                            {item.amountPaise > 0 && (
+                              <span className="text-[10px] font-mono font-bold text-slate-700">
+                                ₹{(item.amountPaise / 100).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-slate-600 leading-snug">
+                            {item.detail}
+                          </p>
+                          <div className="text-[10px] font-bold text-[#006241] pt-1">
+                            {item.type === 'FEE_MISMATCH' ? 'Review in Exceptions Queue →' : 'Inspect Timeline Trace →'}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </motion.div>
               )}
@@ -337,6 +380,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 </motion.div>
               )}
             </div>
+
+            {/* Direct Header 1-Click Sign Out Button */}
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+              title="Sign out of LedgerSense"
+              onClick={handleSignOut}
+              className="h-9 px-3 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer ml-1"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span className="hidden sm:inline">Sign Out</span>
+            </motion.button>
 
           </div>
 

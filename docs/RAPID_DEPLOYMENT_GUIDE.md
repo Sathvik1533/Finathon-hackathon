@@ -62,15 +62,23 @@ Render offers infrastructure-as-code deployment through the included `render.yam
 
 ---
 
-## 4. Option C: Vercel (Instant Dedicated Frontend — 1 Minute)
+## 4. Option C: Vercel (LIVE PRODUCTION URL)
 
-If you wish to host the static UI on Vercel's global edge network while keeping the API on Railway or Render:
+The frontend cockpit is **currently deployed and live** on Vercel's global edge network:
 
-### Step 1: Import Project
-1. Open [Vercel.com](https://vercel.com/new).
-2. Import `Sathvik1533/Finathon-hackathon`.
-3. `vercel.json` is automatically detected at the project root.
-4. Framework Preset: **Other** (Root directory: `./` or `web`).
+🌐 **Live Vercel Production URL**: **`https://finathon-ledgersense-web.vercel.app`**  
+*(Deployment Alias: `https://finathon-ledgersense-9za50blwk-24r21a05hr-8498s-projects.vercel.app`)*
+
+### Live Connectivity Modes:
+1. **With Local Backend Running**:
+   - Simply open: `https://finathon-ledgersense-web.vercel.app?api=http://localhost:4000`
+   - The edge-hosted Vercel UI will talk directly to your local Node.js engine on port 4000!
+2. **With Railway Production Backend**:
+   - Once deployed to Railway, open: `https://finathon-ledgersense-web.vercel.app?api=https://your-api.up.railway.app`
+   - The UI automatically remembers the URL in `localStorage` across page refreshes.
+
+### How it was deployed:
+`vercel --prod --yes` inside `web/` using `web/vercel.json`.
 
 ### Step 2: Connect Backend API
 1. If your backend is deployed on Railway (`https://your-api.up.railway.app`):

@@ -80,5 +80,7 @@ Implementation documentation for data onboarding and synthetic generation, datab
 - [FIN-11 documentation index](docs/fin11/README.md)
 - [MVP completion checklist](docs/fin11/FIN-11_7_MVP_Completion_Checklist.md)
 - [AWS deployment guide](docs/fin11/FIN-11_6_Deployment_Guide_AWS.md)
+- [Antigravity UI/UX and end-to-end build brief](docs/ANTIGRAVITY_REBUILD_BRIEF.md)
+- [Nova API source-of-truth notice](docs/NOVA_API_USAGE.md)
 
 See the index for the full guide list and suggested reading order.

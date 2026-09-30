@@ -18,25 +18,32 @@
 
 Railway provides the fastest path to a live public HTTPS URL with Redis and Node.js working out of the box.
 
-### Step 1: Deploy Backend & Frontend in 1 Click
+### Step 1: Deploy the API service
 1. Log in to [Railway.app](https://railway.app) (GitHub OAuth).
 2. Click **"New Project"** ➔ **"Deploy from GitHub repo"**.
 3. Select `Sathvik1533/Finathon-hackathon`.
-4. Railway detects `railway.json` and builds the Node.js API and serves the dashboard UI immediately.
+4. The current root `railway.json` builds and starts the Express API from `api/` only. It does not build or serve the Vite frontend.
 
 ### Step 2: Add 1-Click Redis
 1. In the Railway dashboard canvas, click **"+ New"** ➔ **"Database"** ➔ **"Add Redis"**.
 2. Railway instantly spins up Redis and exposes `REDIS_URL`.
 3. In your API service settings ➔ **Variables**, ensure:
    - `PORT`: `4000`
-   - `JWT_SECRET`: `finathon-secret-jwt-key-2026`
-   - `DATABASE_URL`: Your Supabase connection string (or leave empty to run in-memory)
+   - `JWT_SECRET`: Generate a unique high-entropy secret and set it in Railway Variables; never commit its value.
+   - `DATABASE_URL`: Required for production. Set the rotated PostgreSQL URL in Railway Variables; do not leave it empty or commit it.
    - `REDIS_URL`: `${{Redis.REDIS_URL}}` (or select from Railway auto-complete)
 
 ### Step 3: Generate Live HTTPS Domain
 1. In the API service ➔ **Settings** ➔ **Networking** ➔ Click **"Generate Domain"**.
-2. Your live URL is ready: `https://finathon-production.up.railway.app`
-3. Visiting the root URL immediately displays the **FIN-11 LedgerSense Executive Terminal**, with real-time API syncing, Redis caching, and Nova streams.
+2. Use the generated domain as the API origin, then verify the documented API health route.
+3. A healthy API response does not prove that Nova authentication, database persistence, or the frontend is working; verify each independently before calling the deployment live.
+
+### Optional: Host the frontend on Railway too
+The repository currently has separate Vercel frontend configuration and a root Railway API configuration. To serve the UI on Railway as well, configure a second Railway frontend service (keep the existing Vercel deployment):
+1. Build from `frontend/` with the locked dependencies and `npm run build`.
+2. Serve the generated `frontend/dist/` files on `0.0.0.0:$PORT`, with an SPA fallback to `index.html` for every client route.
+3. Set `VITE_API_BASE` to the Railway API origin at build time, and configure API CORS or a same-origin proxy deliberately.
+4. Verify direct navigation and refresh on `/dashboard`, `/timeline`, `/exceptions`, `/settlement`, and `/reports`; each must return the app shell, not a host 404.
 
 ---
 
@@ -123,8 +130,8 @@ During the hackathon evaluation, present our production stack topology:
 |---|---|---|---|
 | `PORT` | Optional | `4000` (or `10000` on Render) | HTTP server port |
 | `NODE_ENV` | Optional | `production` | Node environment |
-| `JWT_SECRET` | Recommended | `finathon-secret-jwt-key-2026` | Secret key for JWT session tokens |
-| `DATABASE_URL` | Optional | `postgresql://user:pass@host:5432/db` | Supabase or PostgreSQL connection string |
+ | `JWT_SECRET` | Required | Generate a unique high-entropy value in the provider | Secret key for JWT session tokens |
+ | `DATABASE_URL` | Required | Set the rotated provider URL in Railway Variables; never commit it | Supabase or PostgreSQL connection string |
 | `REDIS_URL` | Optional | `redis://default:pass@host:6379` | Redis connection URL (graceful in-memory fallback if absent) |
 | `NOVA_API_KEY` | Optional | `nova_sk_live_demo` | Nova partner API key |
 | `DEMO_MERCHANT_ID` | Optional | `m_demo_finathon` | Demo merchant identifier |

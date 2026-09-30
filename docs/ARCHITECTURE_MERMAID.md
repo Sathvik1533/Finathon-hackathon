@@ -20,14 +20,23 @@ flowchart TD
     
     ReactApp --> |"HTTPS Bearer JWT"| NodeAPI["Node.js API (Railway)"]
     
-    NodeAPI --> AczenNovaAPI["Aczen Nova API"]
-    subgraph NovaStreams["4 Data Streams"]
-        PaymentsStream["/payments"]
-        GatewayStream["/gateway-transactions"]
-        BankStream["/bank-transactions"]
-        SettlementStream["/settlements"]
+    NodeAPI --> AczenNovaAPI["Aczen Nova API (Live Accounting Feeds)"]
+    subgraph NovaStreams["4 Live Data Streams"]
+        PaymentsStream["/payments (Internal Orders)"]
+        GatewayStream["/gateway-transactions (MDR + GST)"]
+        BankStream["/bank-transactions (UTR Clearings)"]
+        SettlementStream["/settlements (1:N Payout Bundles)"]
     end
     AczenNovaAPI -.-> NovaStreams
+
+    NodeAPI --> JPSynthetic["J.P. Morgan Synthetic Generator"]
+    subgraph JPMapping["J.P. Morgan ICAIF 2020 Methodology"]
+        JPLedger["Decoupled Multi-Ledger Topology"]
+        JPLag["T+0 to T+2 Settlement Latency"]
+        JPNoise["Banking Noise & Fee Variance Injection"]
+        JPGroundTruth["Mathematical Ground-Truth Validation"]
+    end
+    JPSynthetic -.-> JPMapping
     
     NodeAPI --> StageEngine["7-Stage Engine"]
     subgraph EngineStages["Engine Stages"]

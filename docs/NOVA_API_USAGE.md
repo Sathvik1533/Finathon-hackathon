@@ -57,3 +57,15 @@ A sample response for `/gateway-transactions`:
   }
 ]
 ```
+
+---
+
+## 8. How Aczen Nova Pairs with J.P. Morgan's Research Paper
+Our data architecture fuses the real-world accounting contracts of **Aczen Nova** with the mathematical rigor of **J.P. Morgan AI Research** (*Assefa et al., "Generating Synthetic Multi-Source Financial Datasets for Reconciliation", ACM ICAIF 2020*):
+
+1. **Enterprise Realism via Aczen Nova**: Nova provides the canonical data schemas for live digital commerce—capturing merchant order references, PSP fee structures (2% MDR + 18% GST), and bank UTR codes.
+2. **Stress-Testing via J.P. Morgan Methodology**: The J.P. Morgan research methodology gives us a mathematical blueprint to inject realistic banking frictions:
+   - **Multi-Source Event Topologies**: Event propagation across ERP, PSP, Core Banking, and Settlement systems.
+   - **Settlement Lag Distributions**: Differentiating harmless T+2 timing float (`TIMING_LAG`) from genuine missing deposits (`MISSING_BANK_CREDIT`).
+   - **Narration Scrambling**: Simulating how core banking networks strip delimiters and truncate references.
+   - **Ground-Truth Benchmarks**: Guaranteeing that every test case in our suite has a deterministic mathematical baseline.

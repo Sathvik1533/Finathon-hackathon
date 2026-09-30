@@ -1,4 +1,52 @@
-import axios from 'axios';
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
-export const getReport = async () => axios.get(`${API_BASE}/report`);
-export const exportCsv = () => { window.location.href = `${API_BASE}/report?format=csv`; };
+import { API_BASE, authHeader } from './headers';
+
+export interface ModuleCoverage {
+  status: 'IMPLEMENTED' | 'PARTIAL' | 'MISSING';
+  stage?: number;
+  method?: string;
+  recordCount?: number;
+  algorithm?: string;
+  reportId?: string;
+}
+
+export interface ReportData {
+  reportId: string;
+  generatedAt: string;
+  generatedBy: string;
+  problemStatement: string;
+  summary: {
+    totalOrdersIngested: number;
+    cleanMatchedOrders: number;
+    discrepanciesFound: number;
+    totalAmountAtRisk: string;
+    totalSettled: string;
+  };
+  moduleCoverage: Record<string, ModuleCoverage>;
+  exceptionBreakdown: Array<{ type: string; count: number; totalAmountAtRisk: string }>;
+  settlementVerification: {
+    status: 'BALANCED' | 'DISCREPANCY_DETECTED';
+    gatewayNetTotal: string;
+    bankCreditTotal: string;
+    variance: string;
+  };
+  caseDetail: Array<{
+    caseId: string;
+    orderId: string;
+    type: string;
+    amountAtRisk: string;
+    expected: string;
+    actual: string;
+    status: string;
+    stageIdentified: number;
+  }>;
+}
+
+export async function getReport(token: string): Promise<ReportData> {
+  const res = await fetch(`${API_BASE}/api/report`, { headers: authHeader(token) });
+  if (!res.ok) throw new Error('Failed to fetch report: ' + res.status);
+  return res.json();
+}
+
+export function getCsvDownloadUrl(): string {
+  return `${API_BASE}/api/report?format=csv`;
+}

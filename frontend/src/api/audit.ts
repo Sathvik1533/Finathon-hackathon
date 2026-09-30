@@ -1,3 +1,18 @@
-import axios from 'axios';
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
-export const getAuditLogs = async () => axios.get(`${API_BASE}/audit`);
+import { API_BASE, authHeader } from './headers';
+
+export interface AuditEntry {
+  id: string;
+  eventType: string;
+  entityId: string;
+  actorUsername: string;
+  actorRole: string;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function getAuditLogs(token: string): Promise<AuditEntry[]> {
+  const res = await fetch(`${API_BASE}/api/audit-logs`, { headers: authHeader(token) });
+  if (!res.ok) throw new Error('Failed to fetch audit logs');
+  const data = await res.json();
+  return data.logs ?? data;
+}

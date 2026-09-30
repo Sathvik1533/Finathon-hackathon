@@ -1,7 +1,20 @@
 import React from 'react';
-export const ModuleCoverageRow = ({ moduleName, status }: any) => (
-  <div className="flex justify-between border-b border-[#e2e8f0] py-2">
-    <span className="text-sm font-medium">{moduleName}</span>
-    <span className="text-sm text-emerald-600 font-bold">{status}</span>
+import { StatusBadge } from './StatusBadge';
+
+interface ModuleCoverageRowProps {
+  label: string;
+  status: 'IMPLEMENTED' | 'PARTIAL' | 'MISSING';
+  detail?: string | number;
+}
+
+export const ModuleCoverageRow: React.FC<ModuleCoverageRowProps> = ({ label, status, detail }) => (
+  <div className="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors">
+    <div className="flex items-center gap-3">
+      <StatusBadge status={status} />
+      <span className="text-xs font-medium text-slate-700">{label}</span>
+    </div>
+    {detail !== undefined && (
+      <span className="text-[10px] font-mono text-slate-400">{detail}</span>
+    )}
   </div>
 );

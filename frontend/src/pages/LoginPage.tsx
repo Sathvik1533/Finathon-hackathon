@@ -41,27 +41,27 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f4f5f7] flex items-center justify-center p-3 sm:p-6 lg:p-10 antialiased selection:bg-[#006241]/20 selection:text-[#006241]">
+    <div className="min-h-screen bg-[#f4f5f7] flex items-center justify-center p-3 sm:p-6 lg:p-8 antialiased selection:bg-[#006241]/20 selection:text-[#006241]">
       
-      {/* Outer Rounded Container matching Pinterest Geometry */}
-      <div className="w-full max-w-5xl bg-white rounded-[32px] shadow-card border border-slate-200/80 overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[640px]">
+      {/* Outer Rounded Container matching Pinterest Geometry & responsive side-by-side on md+ */}
+      <div className="w-full max-w-5xl bg-white rounded-[32px] shadow-card border border-slate-200/80 overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[580px]">
         
         {/* ========================================================= */}
-        {/* LEFT COLUMN: Premium Forest Green Showcase (5 Cols)        */}
+        {/* LEFT COLUMN: Premium Forest Green Showcase (5 Cols on md+) */}
         {/* ========================================================= */}
-        <div className="lg:col-span-5 bg-[#006241] p-8 sm:p-10 flex flex-col justify-between text-white relative overflow-hidden">
+        <div className="md:col-span-5 bg-[#006241] p-6 sm:p-8 flex flex-col justify-between text-white relative overflow-hidden">
           
           {/* Ambient Radial Lights */}
           <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-teal-500/15 rounded-full blur-2xl pointer-events-none -ml-10 -mb-10" />
 
           {/* Top Brand Mark */}
-          <div className="relative z-10 space-y-2">
+          <div className="relative z-10 space-y-1.5">
             <div className="flex items-center gap-3">
               <motion.div
                 whileHover={{ rotate: 10, scale: 1.05 }}
                 transition={SPRING_FAST}
-                className="h-10 w-10 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center font-bold text-white shadow-sm"
+                className="h-10 w-10 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center font-bold text-white shadow-sm shrink-0"
               >
                 <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <circle cx="12" cy="12" r="10" />
@@ -72,7 +72,7 @@ export const LoginPage: React.FC = () => {
               <div>
                 <div className="font-bold text-lg tracking-tight text-white flex items-center gap-2">
                   <span>LedgerSense</span>
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-white/20 border border-white/30 font-bold">
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-white/20 border border-white/30 font-bold whitespace-nowrap inline-flex items-center shrink-0">
                     FIN-11
                   </span>
                 </div>
@@ -81,56 +81,92 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Center Floating Glass VISA Card */}
-          <div className="relative z-10 py-6 my-auto space-y-4">
+          {/* Center Institutional Multi-Stream Reconciliation Telemetry */}
+          <div className="relative z-10 py-4 my-auto space-y-3.5">
             
-            {/* The Luxury Card */}
             <motion.div
               initial={{ y: 15, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ duration: 0.5, ease: CANONICAL_EASE }}
-              whileHover={{ y: -4, scale: 1.02 }}
-              className="rounded-3xl p-6 bg-gradient-to-br from-white/15 via-white/10 to-white/5 backdrop-blur-xl border border-white/30 shadow-2xl space-y-5 text-white relative overflow-hidden"
+              whileHover={{ y: -2 }}
+              className="rounded-2xl p-5 bg-gradient-to-br from-white/15 via-white/10 to-white/5 backdrop-blur-xl border border-white/25 shadow-xl space-y-3 text-white"
             >
-              {/* Card Header */}
+              {/* Telemetry Header */}
               <div className="flex items-center justify-between">
-                <span className="font-extrabold tracking-widest text-lg text-white">VISA</span>
-                <span className="text-sm font-mono opacity-80">)))</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-[#00c070] animate-pulse" />
+                  <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-100/90 font-mono">
+                    4-Stream Balancing
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/40 border border-emerald-400/30 text-emerald-200">
+                  T+2 Auto-Cleared
+                </span>
               </div>
 
-              {/* Card Chip & Balance */}
-              <div className="space-y-1">
-                <div className="h-6 w-9 rounded-md bg-amber-300/80 border border-amber-200/90 shadow-xs mb-2" />
-                <div className="text-[10px] text-emerald-100/80 uppercase tracking-wider font-semibold">Active Settled Balance</div>
-                <div className="text-2xl font-bold tracking-tight font-mono text-white">₹ 48,702.00</div>
+              {/* Net Settled Amount */}
+              <div className="space-y-0.5">
+                <div className="text-[10px] text-emerald-100/75 uppercase tracking-wider font-semibold">Active Settled Balance</div>
+                <div className="text-2xl sm:text-3xl font-bold tracking-tight font-mono text-white">₹ 48,702.00</div>
               </div>
 
-              {/* Card Footer */}
-              <div className="flex items-center justify-between text-xs font-mono text-emerald-100/90 pt-1 border-t border-white/15">
-                <span>PRIYA SHARMA</span>
-                <span>EXP 09/28</span>
+              {/* 4 Multi-Stream Telemetry Progress Bars */}
+              <div className="space-y-2 pt-2 border-t border-white/15 text-[10px] font-mono">
+                <div className="flex items-center justify-between text-emerald-100/80">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    ERP Orders
+                  </span>
+                  <span className="text-white font-semibold">4 / 4 Synced</span>
+                </div>
+                <div className="flex items-center justify-between text-emerald-100/80">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Gateway MDR (2% + 18% GST)
+                  </span>
+                  <span className="text-white font-semibold">Recomputed</span>
+                </div>
+                <div className="flex items-center justify-between text-emerald-100/80">
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    Bank UTR Statements
+                  </span>
+                  <span className="text-white font-semibold">1:N Matched</span>
+                </div>
+              </div>
+
+              {/* Mini Stats Footer */}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/15 text-center">
+                <div className="bg-white/10 rounded-xl p-1.5">
+                  <div className="text-[9px] text-emerald-200/80">Match Rate</div>
+                  <div className="text-xs font-bold font-mono text-white">99.98%</div>
+                </div>
+                <div className="bg-white/10 rounded-xl p-1.5">
+                  <div className="text-[9px] text-emerald-200/80">Penny Drift</div>
+                  <div className="text-xs font-bold font-mono text-white">₹ 0.00</div>
+                </div>
               </div>
             </motion.div>
 
-            {/* Live Balanced Status Pill */}
-            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-3 flex items-center justify-between text-xs">
+            {/* Live Operational Engine Status Pill */}
+            <div className="bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-2.5 flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-[#00c070] animate-pulse" />
-                <span className="font-semibold text-white">7-Stage Engine Operational</span>
+                <span className="h-2 w-2 rounded-full bg-[#00c070]" />
+                <span className="font-semibold text-white text-[11px]">7-Stage Engine Ready</span>
               </div>
-              <span className="font-mono text-emerald-200 font-bold">Zero Drift</span>
+              <span className="font-mono text-emerald-200 font-bold text-[11px]">Sub-120ms</span>
             </div>
 
           </div>
 
           {/* Bottom Security Assurance */}
-          <div className="relative z-10 pt-4 border-t border-white/15 space-y-2">
-            <div className="flex items-center gap-2 text-[11px] text-emerald-100/80 font-medium">
+          <div className="relative z-10 pt-3 border-t border-white/15 space-y-1">
+            <div className="flex items-center gap-2 text-[10px] text-emerald-100/80 font-medium">
               <span>🛡️ Bank-grade 256-bit encryption</span>
               <span>·</span>
-              <span>J.P. Morgan synthetic feeds</span>
+              <span>J.P. Morgan research feeds</span>
             </div>
-            <p className="text-[11px] text-emerald-100/60 leading-relaxed">
+            <p className="text-[10px] text-emerald-100/60 leading-relaxed">
               Deterministic multi-stream verification balancing ERP, Payment Gateway, and Bank statement records.
             </p>
           </div>
@@ -138,24 +174,22 @@ export const LoginPage: React.FC = () => {
         </div>
 
         {/* ========================================================= */}
-        {/* RIGHT COLUMN: Interactive Login Console (7 Cols)           */}
+        {/* RIGHT COLUMN: Interactive Login Console (7 Cols on md+)     */}
         {/* ========================================================= */}
-        <div className="lg:col-span-7 p-8 sm:p-12 flex flex-col justify-between bg-white">
+        <div className="md:col-span-7 p-6 sm:p-8 lg:p-10 flex flex-col justify-between bg-white">
           
           {/* Top Header */}
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Operator Sign In</span>
-              <button
-                onClick={() => navigate('/neuform')}
-                className="text-xs font-semibold text-[#006241] hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <span>Neuform AI Specs</span>
-                <span>→</span>
-              </button>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-[#006241] bg-[#e6f7ef] px-2.5 py-0.5 rounded-full border border-[#c1ebd5]">
+                FinOps Access Control
+              </span>
+              <span className="text-[10px] font-mono text-slate-400">
+                JWT Auth · Role-Based
+              </span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-              Welcome to FinOps Console
+              Sign In to LedgerSense
             </h2>
             <p className="text-xs text-slate-500 font-medium">
               Access live discrepancy queues, 1:N settlement batches, and mathematical audit logs.
@@ -301,7 +335,7 @@ export const LoginPage: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span>Sign in to FinOps Console</span>
+                  <span>Sign in to LedgerSense</span>
                   <span className="text-sm font-bold">→</span>
                 </>
               )}
@@ -311,7 +345,7 @@ export const LoginPage: React.FC = () => {
 
           {/* Bottom Help Text */}
           <div className="pt-4 text-center text-[11px] text-slate-400 border-t border-slate-100 flex items-center justify-between">
-            <span>FIN-11 Jury Evaluation Build</span>
+            <span className="whitespace-nowrap inline-flex items-center">FIN-11 Evaluation Build</span>
             <span className="font-mono text-[#006241] font-semibold">100% Operational</span>
           </div>
 

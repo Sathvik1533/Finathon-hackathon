@@ -109,19 +109,19 @@ export const DashboardPage: React.FC = () => {
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
 
           {/* ========================================================= */}
-          {/* LEFT COLUMN: VISA-Style Green Card + Payment History (3.8 cols) */}
+          {/* LEFT COLUMN: Institutional Settlement Card + History (4 cols) */}
           {/* ========================================================= */}
           <div className="lg:col-span-4 space-y-6">
             
-            {/* Card 1: Payment Goal with Forest Green VISA Card */}
+            {/* Card 1: Settlement Treasury Balance Card */}
             <motion.div
               {...cardHoverProps}
               className="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-card space-y-4"
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900">Payment Goal</h3>
-                  <p className="text-[11px] text-slate-400">Total amount goal</p>
+                  <h3 className="text-sm font-bold text-slate-900">Settlement Treasury</h3>
+                  <p className="text-[11px] text-slate-400">Automated multi-stream payout</p>
                 </div>
                 <button
                   onClick={() => navigate('/settlement')}
@@ -131,33 +131,42 @@ export const DashboardPage: React.FC = () => {
                 </button>
               </div>
 
-              {/* The Iconic Forest Green Card */}
+              {/* The Institutional Deep Forest Settlement Card */}
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 transition={SPRING_FAST}
-                className="bg-[#006241] text-white rounded-2xl p-5 shadow-sm space-y-4 relative overflow-hidden"
+                className="bg-[#006241] text-white rounded-2xl p-5 shadow-sm space-y-3.5 relative overflow-hidden"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-extrabold tracking-wider text-base">VISA</span>
-                  <span className="text-xs font-mono opacity-80">)))</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-[#00c070] animate-pulse" />
+                    <span className="font-mono text-[10px] tracking-wider uppercase text-emerald-100 font-bold">
+                      Net Clearing Pool
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/15 border border-white/20 text-emerald-100">
+                    T+2 RTGS
+                  </span>
                 </div>
+
                 <div>
-                  <div className="text-[11px] text-emerald-100/80">Settled Balance</div>
-                  <div className="text-2xl font-bold tracking-tight text-white mt-0.5">
+                  <div className="text-[10px] text-emerald-100/75 uppercase tracking-wider font-semibold">Net Bank Payout</div>
+                  <div className="text-2xl font-bold tracking-tight font-mono text-white mt-0.5">
                     {run ? paise(run.totalSettledPaise) : '₹ 4,870.20'}
                   </div>
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-emerald-100/90 font-mono pt-1">
-                  <span>**** 99182</span>
-                  <span>EXP 09/26</span>
+
+                <div className="flex items-center justify-between text-[10px] text-emerald-100/90 font-mono pt-2 border-t border-white/15">
+                  <span>UTR: CMS/NACH/901</span>
+                  <span className="text-emerald-200 font-bold">0.00 Drift</span>
                 </div>
               </motion.div>
 
-              {/* Weekly Revenue / Net Settled */}
+              {/* Cycle Performance / Reconciliation Rate */}
               <div className="pt-2 flex items-center justify-between">
                 <div>
-                  <div className="text-[11px] text-slate-400">Weekly Revenue</div>
-                  <div className="text-base font-bold text-slate-900 mt-0.5">+₹3,945 USD</div>
+                  <div className="text-[11px] text-slate-400">Reconciliation Rate</div>
+                  <div className="text-base font-bold text-slate-900 mt-0.5 font-mono">99.98% Matched</div>
                 </div>
                 <motion.span
                   initial={{ scale: 0.8 }}
@@ -165,7 +174,7 @@ export const DashboardPage: React.FC = () => {
                   transition={SPRING_FAST}
                   className="bg-[#00c070] text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-xs"
                 >
-                  +12.8%
+                  +12.8% Cycle
                 </motion.span>
               </div>
             </motion.div>

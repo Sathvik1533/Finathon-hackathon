@@ -9,7 +9,6 @@ import { NovaExplorerPage } from './pages/NovaExplorerPage';
 import { ExceptionsPage } from './pages/ExceptionsPage';
 import { SettlementPage } from './pages/SettlementPage';
 import { ReportPage } from './pages/ReportPage';
-import { NeuformLandingPage } from './pages/NeuformLandingPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
@@ -22,7 +21,6 @@ const App: React.FC = () => (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/neuform" element={<NeuformLandingPage />} />
         <Route path="/dashboard"  element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
         <Route path="/timeline"   element={<ProtectedRoute><TimelinePage /></ProtectedRoute>} />
         <Route path="/nova"       element={<ProtectedRoute><NovaExplorerPage /></ProtectedRoute>} />

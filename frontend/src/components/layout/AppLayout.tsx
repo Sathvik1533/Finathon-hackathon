@@ -15,7 +15,6 @@ const NAV_ITEMS = [
   { to: '/exceptions', label: 'Exceptions' },
   { to: '/settlement', label: 'Settlement' },
   { to: '/report', label: 'Reports' },
-  { to: '/neuform', label: 'Neuform AI' },
 ];
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
@@ -36,7 +35,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <motion.div
               whileHover={{ rotate: 10, scale: 1.05 }}
               transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-              className="h-10 w-10 rounded-2xl bg-[#006241] flex items-center justify-center text-white font-bold text-base shadow-pill tracking-tight cursor-pointer"
+              className="h-10 w-10 rounded-2xl bg-[#006241] flex items-center justify-center text-white font-bold text-base shadow-pill tracking-tight cursor-pointer shrink-0"
               onClick={() => navigate('/dashboard')}
             >
               <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -49,7 +48,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               <span className="text-xl font-bold tracking-tight text-slate-900 cursor-pointer" onClick={() => navigate('/dashboard')}>
                 LedgerSense
               </span>
-              <span className="hidden sm:inline-block text-[10px] uppercase font-semibold tracking-wider text-[#006241] bg-[#e6f7ef] px-2.5 py-0.5 rounded-full border border-[#c1ebd5]">
+              <span className="hidden sm:inline-flex items-center text-[10px] uppercase font-semibold tracking-wider text-[#006241] bg-[#e6f7ef] px-2.5 py-0.5 rounded-full border border-[#c1ebd5] whitespace-nowrap shrink-0">
                 FIN-11
               </span>
             </div>

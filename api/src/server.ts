@@ -2,10 +2,11 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import { config } from './config';
-import { checkDbHealth } from './db';
+import { checkDbHealth, initDatabaseSchema, persistReconRun, persistDecision, persistAuditLog } from './db';
 import { loginUser, authenticate, AuthenticatedRequest } from './auth';
 import { novaClient } from './novaClient';
 import { reconEngine, DiscrepancyCase } from './reconEngine';
+import { redisCache } from './redis';
 
 const app = express();
 
@@ -24,6 +25,7 @@ const auditLogs: any[] = [];
 // Seed initial state
 (async function init() {
   try {
+    await initDatabaseSchema();
     const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
       novaClient.fetchPayments(),
       novaClient.fetchGatewayTransactions(),
@@ -40,6 +42,10 @@ const auditLogs: any[] = [];
       user: 'system@ledgersense.internal',
       timestamp: new Date().toISOString(),
     });
+    await persistReconRun(latestRun);
+    await persistAuditLog('SYSTEM_BOOTSTRAP_INITIALIZED', 'system@ledgersense.internal', `Bootstrap run ${latestRun.runId}`, latestRun.runId);
+    await redisCache.setLatestRunSummary(latestRun);
+    await redisCache.cacheRunSummary(latestRun.runId, latestRun);
   } catch (err) {
     console.error('Initialization error:', err);
   }
@@ -52,10 +58,22 @@ app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
   res.json({
     status: 'healthy',
     service: 'finathon-api',
-    stack: 'Node.js + Express + TypeScript',
+    stack: 'Node.js + Express + TypeScript + PostgreSQL',
     timestamp: new Date().toISOString(),
     database: dbHealth,
     nova: novaStatus,
+  });
+});
+
+app.get('/api/db/status', async (req: Request, res: Response) => {
+  const dbHealth = await checkDbHealth();
+  res.json({
+    database: dbHealth,
+    inMemoryRecords: {
+      cases: currentCases.length,
+      auditLogs: auditLogs.length,
+      latestRunId: latestRun?.runId || null,
+    },
   });
 });
 
@@ -153,6 +171,9 @@ app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, r
       timestamp: new Date().toISOString(),
     });
 
+    await persistReconRun(result);
+    await persistAuditLog('RECONCILIATION_RUN_COMPLETED', req.user?.username || 'system', `Run ${result.runId}: ${result.discrepancyCount} discrepancies`, result.runId);
+
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ error: 'Reconciliation failed', details: err.message });
@@ -177,32 +198,36 @@ app.get('/api/cases/:id', authenticate, (req: AuthenticatedRequest, res: Respons
   res.json(caseItem);
 });
 
-app.post('/api/cases/:id/decision', authenticate, (req: AuthenticatedRequest, res: Response) => {
+app.post('/api/cases/:id/decision', authenticate, async (req: AuthenticatedRequest, res: Response) => {
   const { decision, reason } = req.body;
   if (!['APPROVED', 'REJECTED', 'ESCALATED'].includes(decision)) {
     res.status(400).json({ error: 'Decision must be APPROVED, REJECTED, or ESCALATED' });
     return;
   }
 
-  const caseIndex = currentCases.findIndex((c) => c.caseId === req.params.id);
+  const caseId = String(req.params.id);
+  const caseIndex = currentCases.findIndex((c) => c.caseId === caseId);
   if (caseIndex === -1) {
-    res.status(404).json({ error: `Case ${req.params.id} not found` });
+    res.status(404).json({ error: `Case ${caseId} not found` });
     return;
   }
 
   currentCases[caseIndex].status = decision;
+  const rationaleText = reason || 'Reviewed by finance analyst';
 
   auditLogs.unshift({
     action: 'CASE_DECISION_RECORDED',
-    caseId: req.params.id,
+    caseId,
     decision,
-    reason: reason || 'Reviewed by finance analyst',
+    reason: rationaleText,
     user: req.user?.username,
     timestamp: new Date().toISOString(),
   });
 
+  await persistDecision(caseId, decision, rationaleText, req.user?.username || 'admin');
+
   res.json({
-    message: `Case ${req.params.id} updated to ${decision}`,
+    message: `Case ${caseId} updated to ${decision}`,
     case: currentCases[caseIndex],
   });
 });

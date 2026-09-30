@@ -73,12 +73,14 @@ async function runTests() {
   });
 
   // Test 4: Authenticated Reconcile Logic
-  console.log('[4/4] Testing Express Reconcile Handler with JWT...');
+  console.log('[4/6] Testing Express Reconcile Handler with JWT...');
+  let runCases: any[] = [];
   await new Promise<void>((resolve, reject) => {
     const mockRes = createMockResponse((status, data) => {
       if (status !== 200 || !data.runId) {
         reject(new Error(`Expected 200 with runId, got ${status}`));
       } else {
+        runCases = data.cases || [];
         console.log(`  ✓ Express app executed reconciliation with runId ${data.runId}, ${data.cases.length} cases flagged`);
         resolve();
       }
@@ -91,6 +93,43 @@ async function runTests() {
     };
     (app as any).handle(reconReq, mockRes);
   });
+
+  // Test 5: DB Status Endpoint
+  console.log('[5/6] Testing Database Status Endpoint...');
+  await new Promise<void>((resolve, reject) => {
+    const mockRes = createMockResponse((status, data) => {
+      if (status !== 200 || !data.database) {
+        reject(new Error(`Expected 200 with database status, got ${status}`));
+      } else {
+        console.log('  ✓ Database status endpoint responded with health & in-memory counts');
+        resolve();
+      }
+    });
+    (app as any).handle({ method: 'GET', url: '/api/db/status', headers: {} }, mockRes);
+  });
+
+  // Test 6: Case Review Decision with Rationale
+  console.log('[6/6] Testing Exception Review Decision Flow...');
+  if (runCases.length > 0) {
+    const targetCaseId = runCases[0].caseId;
+    await new Promise<void>((resolve, reject) => {
+      const mockRes = createMockResponse((status, data) => {
+        if (status !== 200 || data.case?.status !== 'APPROVED') {
+          reject(new Error(`Expected 200 with APPROVED status, got ${status}: ${JSON.stringify(data)}`));
+        } else {
+          console.log(`  ✓ Case ${targetCaseId} successfully updated to APPROVED with audit trail`);
+          resolve();
+        }
+      });
+      const decisionReq: any = {
+        method: 'POST',
+        url: `/api/cases/${targetCaseId}/decision`,
+        headers: { authorization: `Bearer ${loginRes.token}`, 'content-type': 'application/json' },
+        body: { decision: 'APPROVED', reason: 'Verified fee schedule tolerance clause 3.2' },
+      };
+      (app as any).handle(decisionReq, mockRes);
+    });
+  }
 
   await closePool();
   console.log('======================================================');

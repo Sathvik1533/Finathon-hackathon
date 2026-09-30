@@ -76,7 +76,9 @@ export class ReconEngine {
       const expectedTotalDeduction = expectedFee + expectedTax;
       const actualDeduction = gw.fee + gw.tax;
 
+      let hasFeeMismatch = false;
       if (Math.abs(expectedTotalDeduction - actualDeduction) > 100) {
+        hasFeeMismatch = true;
         // variance > 1 Rupee (100 paise)
         const diff = Math.abs(expectedTotalDeduction - actualDeduction);
         cases.push({
@@ -93,7 +95,6 @@ export class ReconEngine {
         });
       } else {
         matchedCount++;
-        totalSettledPaise += gw.net_amount;
       }
 
       // Stage 6: Settlement batch matching
@@ -111,6 +112,8 @@ export class ReconEngine {
           details: 'Captured in gateway within T+2 settlement window. In-flight pending bank clearing.',
           stageIdentified: 6,
         });
+      } else if (!hasFeeMismatch) {
+        totalSettledPaise += gw.net_amount;
       }
     }
 

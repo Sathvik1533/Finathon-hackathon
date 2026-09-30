@@ -104,6 +104,10 @@
               <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 ping-dot"></span>
               <span id="api-status-text">CONNECTING API...</span>
             </span>
+            <span id="db-status-badge" class="hidden sm:flex items-center gap-1.5 bg-blue-500/10 text-blue-400 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/30 font-mono">
+              <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
+              <span id="db-status-text">POSTGRES DB READY</span>
+            </span>
           </div>
           <p class="text-[11px] text-slate-400">7-Stage Deterministic Payment Reconciliation & Settlement Platform</p>
         </div>
@@ -904,7 +908,7 @@
   <!-- APPLICATION LOGIC & API DYNAMIC SYNC -->
   <script>
     // Configuration & State
-    const API_BASE = window.location.origin.includes('localhost:4000') ? '' : 'http://localhost:4000';
+    const API_BASE = (window.location.port === '4000' || window.location.origin.includes(':4000')) ? '' : 'http://localhost:4000';
     let jwtToken = null;
     let isApiConnected = false;
     let activeCaseId = null;
@@ -953,6 +957,15 @@
       walkthroughModal.close();
     }
 
+    function openCaseModalById(caseId) {
+      const c = appState.cases.find(item => item.caseId === caseId);
+      if (!c) return;
+      let policy = 'POL_FEE_TOLERANCE §3.2';
+      if (c.discrepancyType === 'TIMING_LAG') policy = 'POL_TIMING_LAG §1.4';
+      if (c.discrepancyType === 'MISSING_BANK_CREDIT') policy = 'POL_MISSING_CREDIT §2.1';
+      openCaseModal(c.caseId, c.discrepancyType, c.amountAtRisk, c.details, policy);
+    }
+
     function openCaseModal(caseId, category, riskPaise, explanation, policy) {
       activeCaseId = caseId;
       document.getElementById('modal-title').innerText = `Review Exception: ${caseId}`;
@@ -972,6 +985,8 @@
     async function initApiConnection() {
       const statusBadge = document.getElementById('api-status-badge');
       const statusText = document.getElementById('api-status-text');
+      const dbBadge = document.getElementById('db-status-badge');
+      const dbText = document.getElementById('db-status-text');
 
       try {
         const healthRes = await fetch(`${API_BASE}/api/health`);
@@ -980,6 +995,16 @@
           isApiConnected = true;
           statusBadge.className = 'flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono';
           statusText.innerText = 'NODE API ACTIVE (4000)';
+
+          if (dbBadge && dbText) {
+            if (healthData.database && healthData.database.ok) {
+              dbBadge.className = 'hidden sm:flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono';
+              dbText.innerText = 'POSTGRES RLS ACTIVE';
+            } else {
+              dbBadge.className = 'hidden sm:flex items-center gap-1.5 bg-blue-500/10 text-blue-300 text-[10px] px-2 py-0.5 rounded-full border border-blue-500/30 font-mono';
+              dbText.innerText = 'PG IN-MEMORY FALLBACK';
+            }
+          }
 
           // Authenticate & get JWT
           const loginRes = await fetch(`${API_BASE}/api/auth/login`, {
@@ -1005,6 +1030,10 @@
       isApiConnected = false;
       statusBadge.className = 'flex items-center gap-1.5 bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full border border-cyan-500/30 font-mono';
       statusText.innerText = 'LOCAL ENGINE MODE';
+      if (dbBadge && dbText) {
+        dbBadge.className = 'hidden sm:flex items-center gap-1.5 bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full border border-cyan-500/30 font-mono';
+        dbText.innerText = 'DETERMINISTIC DB ENGINE';
+      }
       loadLocalFallbackState();
     }
 

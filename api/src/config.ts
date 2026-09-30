@@ -9,5 +9,7 @@ export const config = {
   novaBaseUrl: process.env.NOVA_BASE_URL || 'https://api.novapayments.example/v1',
   adminUsername: process.env.ADMIN_USERNAME || 'admin',
   adminPassword: process.env.ADMIN_PASSWORD || 'admin123',
-  demoMerchantId: process.env.DEMO_MERCHANT_ID || 'm_demo_finathon'
+  demoMerchantId: process.env.DEMO_MERCHANT_ID || 'm_demo_finathon',
+  redisUrl: process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL || ''
 };
+

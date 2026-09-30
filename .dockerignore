@@ -11,5 +11,7 @@ ENV
 .env
 .env.*
 tests
+docs
+node_modules
 *.md
 .DS_Store

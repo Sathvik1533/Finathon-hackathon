@@ -1,6 +1,6 @@
 name: CD Deployment Pipeline
 
-on:
+'on':
   push:
     branches: [ main ]
   workflow_dispatch:
@@ -77,14 +77,38 @@ jobs:
       - name: Smoke Test Built Container
         if: steps.meta.outputs.has_docker == 'true'
         run: |
-          docker images finathon-hackathon:latest
-          echo "Container image verified successfully."
+          echo "Launching built container in test isolation..."
+          CONTAINER_ID=$(docker run -d -p 8000:8000 finathon-hackathon:latest)
+          
+          SUCCESS=0
+          for i in $(seq 1 15); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
+              echo "✓ Container is live and healthy on port 8000 (iteration $i)."
+              SUCCESS=1
+              break
+            fi
+            sleep 1
+          done
+          
+          if [ $SUCCESS -ne 1 ]; then
+            echo "✗ ERROR: Container health check failed to respond within 15 seconds!"
+            docker logs "$CONTAINER_ID"
+            docker stop "$CONTAINER_ID" || true
+            exit 1
+          fi
+          
+          # Query health endpoint payload and verify JSON response
+          RESPONSE=$(curl -fsS http://127.0.0.1:8000/health)
+          echo "Health Response: $RESPONSE"
+          
+          docker stop "$CONTAINER_ID"
+          echo "✓ Container smoke test passed and container cleanly stopped."
 
   deploy-staging:
     name: Deploy to Staging Environment
     needs: build-and-package
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     environment:
       name: staging
       url: https://staging.finathon.example.com
@@ -112,10 +136,10 @@ jobs:
           fi
           
           # Deployment execution hook:
-          # Supports Cloud provider deployments (e.g. AWS ECS / App Runner, Render, Railway, Vercel, GCP)
           if [ -n "${{ secrets.DEPLOY_WEBHOOK_URL_STAGING }}" ]; then
             echo "Triggering staging deployment webhook..."
-            curl -s -X POST "${{ secrets.DEPLOY_WEBHOOK_URL_STAGING }}" || echo "Webhook trigger completed."
+            curl -fsS -X POST "${{ secrets.DEPLOY_WEBHOOK_URL_STAGING }}"
+            echo "Staging deployment webhook triggered successfully."
           else
             echo "Note: DEPLOY_WEBHOOK_URL_STAGING secret is not configured; simulated staging release completed successfully."
           fi
@@ -123,7 +147,12 @@ jobs:
       - name: Post-Deploy Health Check
         run: |
           echo "Running staging service health checks..."
-          echo "✓ Staging deployment verified and responsive."
+          if [ -n "${{ secrets.STAGING_APP_URL }}" ]; then
+            curl -fsS --retry 3 "${{ secrets.STAGING_APP_URL }}/health"
+            echo "✓ Staging deployment verified at ${{ secrets.STAGING_APP_URL }}"
+          else
+            echo "✓ Simulated staging deployment verified."
+          fi
 
   deploy-production:
     name: Deploy to Production Environment
@@ -158,7 +187,8 @@ jobs:
           
           if [ -n "${{ secrets.DEPLOY_WEBHOOK_URL_PROD }}" ]; then
             echo "Triggering production deployment webhook..."
-            curl -s -X POST "${{ secrets.DEPLOY_WEBHOOK_URL_PROD }}" || echo "Webhook trigger completed."
+            curl -fsS -X POST "${{ secrets.DEPLOY_WEBHOOK_URL_PROD }}"
+            echo "Production deployment webhook triggered successfully."
           else
             echo "Note: DEPLOY_WEBHOOK_URL_PROD secret is not configured; simulated production release completed successfully."
           fi
@@ -166,4 +196,9 @@ jobs:
       - name: Post-Deploy Health Check
         run: |
           echo "Running production service health verification..."
-          echo "✓ Production deployment verified and operational."
+          if [ -n "${{ secrets.PRODUCTION_APP_URL }}" ]; then
+            curl -fsS --retry 3 "${{ secrets.PRODUCTION_APP_URL }}/health"
+            echo "✓ Production deployment verified at ${{ secrets.PRODUCTION_APP_URL }}"
+          else
+            echo "✓ Simulated production deployment verified."
+          fi

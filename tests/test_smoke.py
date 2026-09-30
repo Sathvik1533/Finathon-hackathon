@@ -2,6 +2,8 @@
 
 import glob
 import os
+import re
+import subprocess
 import yaml
 from fastapi.testclient import TestClient
 from src import __version__
@@ -40,9 +42,9 @@ def test_github_workflows_yaml_syntax():
     """Verify all GitHub Actions workflow YAML files are strictly valid syntax."""
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     workflow_dir = os.path.join(repo_root, ".github", "workflows")
-    yaml_files = glob.glob(os.path.join(workflow_dir, "*.yml")) + glob.glob(os.path.join(workflow_dir, "*.yaml"))
+    yaml_files = sorted(glob.glob(os.path.join(workflow_dir, "*.yml")) + glob.glob(os.path.join(workflow_dir, "*.yaml")))
 
-    assert len(yaml_files) >= 2, f"Expected at least 2 workflow files, found {len(yaml_files)}"
+    assert len(yaml_files) >= 3, f"Expected at least 3 workflow files (ci, cd, codeql), found {len(yaml_files)}"
 
     for yf in yaml_files:
         with open(yf, "r", encoding="utf-8") as f:
@@ -50,12 +52,58 @@ def test_github_workflows_yaml_syntax():
             assert content is not None, f"Workflow file {yf} parsed to empty content"
             assert "name" in content, f"Workflow file {yf} missing 'name' key"
             assert "jobs" in content, f"Workflow file {yf} missing 'jobs' key"
+            assert ("on" in content or True in content), f"Workflow file {yf} missing trigger 'on' key"
+
+
+def test_gitleaks_configuration_present():
+    """Verify .gitleaks.toml configuration exists and contains required rules."""
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    gitleaks_path = os.path.join(repo_root, ".gitleaks.toml")
+    assert os.path.isfile(gitleaks_path), ".gitleaks.toml must exist in repo root"
+
+    with open(gitleaks_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert "nova-api-key" in content, "Missing nova-api-key rule in .gitleaks.toml"
+    assert "razorpay-key-id" in content, "Missing razorpay-key-id rule in .gitleaks.toml"
+    assert "allowlist" in content, "Missing allowlist in .gitleaks.toml"
 
 
 def test_no_sensitive_files_tracked():
-    """Verify that credentials or sensitive files are not accidentally committed."""
+    """Verify that credentials or sensitive files are not accidentally committed across repository."""
     repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    forbidden_files = [".env", ".env.local", "credentials.json", "id_rsa"]
-    for forbidden in forbidden_files:
-        full_path = os.path.join(repo_root, forbidden)
-        assert not os.path.exists(full_path), f"Sensitive file {forbidden} should not exist in repository root!"
+    
+    # Query git ls-files if inside a git repository
+    try:
+        proc = subprocess.run(
+            ["git", "ls-files"],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        tracked_files = proc.stdout.strip().splitlines()
+    except Exception:
+        tracked_files = []
+
+    # Regex for sensitive filenames, excluding benign examples (.env.example, .env.sample, .env.template)
+    forbidden_pattern = re.compile(r"(^|/)(\.env(\..+)?|.*\.pem|.*\.key|.*id_rsa.*|.*credentials\.json)$")
+    template_pattern = re.compile(r"\.env\.(example|sample|template)$")
+
+    for f in tracked_files:
+        if template_pattern.search(f):
+            continue
+        assert not forbidden_pattern.search(f), f"Sensitive file tracked in git: {f}"
+
+
+def test_dockerfile_security_and_health():
+    """Verify Dockerfile enforces non-root user execution and health check."""
+    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    dockerfile_path = os.path.join(repo_root, "Dockerfile")
+    assert os.path.isfile(dockerfile_path), "Dockerfile must exist in repo root"
+
+    with open(dockerfile_path, "r", encoding="utf-8") as f:
+        dockerfile = f.read()
+
+    assert "USER " in dockerfile, "Dockerfile must declare a non-root USER"
+    assert "HEALTHCHECK " in dockerfile, "Dockerfile must declare a HEALTHCHECK directive"

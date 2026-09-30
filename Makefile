@@ -10,10 +10,11 @@ help:
 	@echo "  make clean      - Clean cache and build artifacts"
 
 install:
+	python3 -m pip install -r requirements.txt
 	python3 -m pip install -r requirements-dev.txt
 
 lint:
-	python3 -m py_compile src/app.py tests/test_smoke.py
+	python3 -m compileall -q -x '(\.venv|venv|\.git|node_modules)/' .
 
 test:
 	python3 -m pytest tests/ -v

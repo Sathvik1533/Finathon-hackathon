@@ -1,0 +1,30 @@
+# Gitleaks Configuration for Finathon LedgerSense
+# Reference: docs/fin11/FIN-11_6_Deployment_Guide_AWS.md
+
+[[rules]]
+id = "nova-api-key"
+description = "Nova API key"
+regex = '''nova_sk_[A-Za-z0-9_\-]{43}'''
+
+[[rules]]
+id = "razorpay-key-id"
+description = "Razorpay key id (Phase 2)"
+regex = '''rzp_(test|live)_[A-Za-z0-9]{10,}'''
+
+[[rules]]
+id = "razorpay-secret-assignment"
+description = "Razorpay key or webhook secret assigned in a file (heuristic; the secret has no fixed prefix)"
+regex = '''RAZORPAY_(KEY_SECRET|WEBHOOK_SECRET)\s*[=:]\s*['"]?[A-Za-z0-9_\-]{16,}'''
+
+[allowlist]
+description = "Allow placeholders, documentation, and config files"
+regexes = [
+  '''nova_sk_REPLACE_ME''',
+  '''rzp_test_REPLACE_ME''',
+  '''RAZORPAY_KEY_SECRET=REPLACE_ME''',
+  '''RAZORPAY_WEBHOOK_SECRET=REPLACE_ME'''
+]
+paths = [
+  '''docs/.*''',
+  '''\.gitleaks\.toml'''
+]

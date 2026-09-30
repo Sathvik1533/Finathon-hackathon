@@ -1,8 +1,8 @@
 name: CI Pipeline
 
-on:
+'on':
   push:
-    branches: [ main, master, develop, auth ]
+    branches: [ main, master, develop, auth, 'feat/**', 'fix/**' ]
   pull_request:
     branches: [ main, master, develop ]
   workflow_dispatch:
@@ -27,6 +27,7 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+
       - name: Install Validation & Linting Tools
         run: |
           python -m pip install --upgrade pip
@@ -36,12 +37,14 @@ jobs:
         run: |
           python -c "
           import yaml, glob, sys
-          yaml_files = glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml')
+          yaml_files = sorted(glob.glob('.github/workflows/*.yml') + glob.glob('.github/workflows/*.yaml'))
           errors = 0
           for yf in yaml_files:
               try:
-                  with open(yf, 'r') as f:
-                      yaml.safe_load(f)
+                  with open(yf, 'r', encoding='utf-8') as f:
+                      content = yaml.safe_load(f)
+                      if not content or 'jobs' not in content:
+                          raise ValueError('Missing jobs or empty workflow definition')
                   print(f'✓ Valid YAML: {yf}')
               except Exception as e:
                   print(f'✗ Invalid YAML: {yf}: {e}', file=sys.stderr)
@@ -59,21 +62,57 @@ jobs:
           # Report warnings with exit-zero for non-blocking style guidance
           flake8 . --count --exit-zero --max-complexity=15 --max-line-length=120 --statistics --exclude=.git,__pycache__,venv,.venv,node_modules
 
-      - name: Check for Uncommitted Sensitive Files
+      - name: Check for Untracked Sensitive Filenames
         run: |
-          echo "Scanning for sensitive files that should not be tracked..."
-          BLOCKED_PATTERNS=("\.env$" "\.env\." "\.pem$" "\.key$" "id_rsa" "credentials\.json$")
-          LEAK_FOUND=0
-          for pattern in "${BLOCKED_PATTERNS[@]}"; do
-            if git ls-files | grep -E "$pattern" 2>/dev/null; then
-              echo "SECURITY ERROR: Sensitive file matching pattern '$pattern' found tracked in git!"
-              LEAK_FOUND=1
-            fi
-          done
-          if [ $LEAK_FOUND -ne 0 ]; then
+          echo "Scanning git-tracked files for forbidden secret filenames..."
+          # Match forbidden filenames (.env, .pem, .key, id_rsa, credentials.json)
+          # Explicitly permit benign template files (.env.example, .env.sample, .env.template)
+          TRACKED_LEAKS=$(git ls-files | grep -v -E '\.env\.(example|sample|template)$' | grep -E '(^|/)(\.env(\..+)?|.*\.pem|.*\.key|.*id_rsa.*|.*credentials\.json)$' || true)
+          if [ -n "$TRACKED_LEAKS" ]; then
+            echo "SECURITY ERROR: Sensitive file(s) tracked in git repository:"
+            echo "$TRACKED_LEAKS"
             exit 1
           fi
           echo "✓ No sensitive credentials or environment files tracked in git."
+
+  secret-scan:
+    name: Secret & Credential Leak Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks Detector
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: false
+          GITLEAKS_NOTIFY_USER_ISSUE: false
+
+      - name: Verify No High-Risk Secret Tokens in Code
+        run: |
+          echo "Running content regex scan for Nova and Razorpay secret keys..."
+          FOUND=0
+          # Scan tracked files (excluding docs and .gitleaks.toml) for active Nova and Razorpay secrets
+          for file in $(git ls-files | grep -v -E '^(docs/|\.gitleaks\.toml)'); do
+            if grep -E 'nova_sk_[A-Za-z0-9_\-]{43}' "$file" 2>/dev/null | grep -v 'nova_sk_REPLACE_ME'; then
+              echo "CRITICAL: Live Nova API key found in $file!"
+              FOUND=1
+            fi
+            if grep -E 'rzp_(test|live)_[A-Za-z0-9]{10,}' "$file" 2>/dev/null | grep -v 'rzp_test_REPLACE_ME'; then
+              echo "CRITICAL: Live Razorpay key found in $file!"
+              FOUND=1
+            fi
+          done
+          if [ $FOUND -ne 0 ]; then
+            echo "Security scan failed: Live API credentials detected!"
+            exit 1
+          fi
+          echo "✓ No credential token leaks detected in codebase."
 
   test-python:
     name: Python Test Suite (Python ${{ matrix.python-version }})
@@ -102,14 +141,21 @@ jobs:
           fi
           if [ -f requirements-dev.txt ]; then
             pip install -r requirements-dev.txt
-          else
-            pip install pytest pytest-cov
           fi
+          if [ -f ai/requirements.txt ]; then
+            echo "Installing AI service dependencies..."
+            pip install -r ai/requirements.txt
+          fi
+          pip install pytest pytest-cov
 
       - name: Run Pytest Test Suite with Coverage
         run: |
-          if [ -d tests ] || ls test_*.py 1>/dev/null 2>&1; then
-            pytest -v --tb=short --durations=10
+          TEST_DIRS=""
+          if [ -d tests ]; then TEST_DIRS="$TEST_DIRS tests"; fi
+          if [ -d ai/tests ]; then TEST_DIRS="$TEST_DIRS ai/tests"; elif [ -d ai ]; then TEST_DIRS="$TEST_DIRS ai"; fi
+          
+          if [ -n "$TEST_DIRS" ]; then
+            pytest $TEST_DIRS -v --tb=short --durations=10
           else
             echo "No test directory found yet; running baseline smoke validation."
             python -c "print('Baseline runtime validation passed on Python ${{ matrix.python-version }}')"
@@ -128,13 +174,22 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check for Node.js Project
+      - name: Detect Node.js Projects
         id: check_node
         run: |
-          if [ -f package.json ]; then
+          NODE_DIRS=""
+          for d in . web api; do
+            if [ -f "$d/package.json" ]; then
+              NODE_DIRS="$NODE_DIRS $d"
+            fi
+          done
+          if [ -n "$NODE_DIRS" ]; then
             echo "has_node=true" >> "$GITHUB_OUTPUT"
+            echo "node_dirs=$NODE_DIRS" >> "$GITHUB_OUTPUT"
+            echo "Found Node.js project(s) in:$NODE_DIRS"
           else
             echo "has_node=false" >> "$GITHUB_OUTPUT"
+            echo "No Node.js packages detected."
           fi
 
       - name: Set up Node.js ${{ matrix.node-version }}
@@ -142,42 +197,40 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "npm"
 
       - name: Install Node Dependencies
         if: steps.check_node.outputs.has_node == 'true'
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+          for d in ${{ steps.check_node.outputs.node_dirs }}; do
+            echo "=== Installing dependencies in $d ==="
+            (cd "$d" && if [ -f package-lock.json ]; then npm ci; else npm install; fi)
+          done
 
       - name: Run Node Linter
         if: steps.check_node.outputs.has_node == 'true'
         run: |
-          if npm run | grep -q "lint"; then
-            npm run lint
-          fi
+          for d in ${{ steps.check_node.outputs.node_dirs }}; do
+            (cd "$d" && if npm run | grep -q "lint"; then npm run lint; fi)
+          done
 
       - name: Run Node Tests
         if: steps.check_node.outputs.has_node == 'true'
         run: |
-          if npm run | grep -q "test"; then
-            npm test
-          fi
+          for d in ${{ steps.check_node.outputs.node_dirs }}; do
+            (cd "$d" && if npm run | grep -q "test"; then npm test; fi)
+          done
 
       - name: Run Node Build
         if: steps.check_node.outputs.has_node == 'true'
         run: |
-          if npm run | grep -q "build"; then
-            npm run build
-          fi
+          for d in ${{ steps.check_node.outputs.node_dirs }}; do
+            (cd "$d" && if npm run | grep -q "build"; then npm run build; fi)
+          done
 
       - name: Skip Notification
         if: steps.check_node.outputs.has_node == 'false'
         run: |
-          echo "No package.json detected; skipping Node.js matrix test."
+          echo "No package.json detected across ., web, or api; skipping Node.js execution."
 
   security-audit:
     name: Security & Vulnerability Audit
@@ -195,41 +248,51 @@ jobs:
 
       - name: Run Python Dependency Audit
         run: |
-          if [ -f requirements.txt ]; then
-            pip install pip-audit
-            pip-audit -r requirements.txt || echo "::warning::pip-audit reported advisories on requirements.txt"
-          else
-            echo "No requirements.txt found; skipping pip-audit."
+          pip install pip-audit
+          AUDITED=0
+          for req in requirements.txt ai/requirements.txt; do
+            if [ -f "$req" ]; then
+              echo "Auditing dependencies in $req..."
+              pip-audit -r "$req" || echo "::warning::pip-audit reported advisories on $req"
+              AUDITED=1
+            fi
+          done
+          if [ $AUDITED -eq 0 ]; then
+            echo "No python requirements files found; skipping pip-audit."
           fi
 
       - name: Run NPM Security Audit
         run: |
-          if [ -f package.json ]; then
-            npm audit --audit-level=high || echo "::warning::npm audit reported high severity advisories"
-          else
-            echo "No package.json found; skipping npm audit."
-          fi
+          for pkg in package.json web/package.json api/package.json; do
+            if [ -f "$pkg" ]; then
+              dir=$(dirname "$pkg")
+              echo "Running npm audit in $dir..."
+              (cd "$dir" && npm audit --audit-level=high || echo "::warning::npm audit reported high severity advisories in $dir")
+            fi
+          done
 
   ci-gate:
     name: CI Pipeline Gate
-    needs: [lint-and-validate, test-python, test-node, security-audit]
+    needs: [lint-and-validate, secret-scan, test-python, test-node, security-audit]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Evaluate Pipeline Status
         run: |
           LINT="${{ needs.lint-and-validate.result }}"
+          SECRETS="${{ needs.secret-scan.result }}"
           PYTEST="${{ needs.test-python.result }}"
           NODE="${{ needs.test-node.result }}"
           SECURITY="${{ needs.security-audit.result }}"
           
           echo "Pipeline results summary:"
           echo "  - lint-and-validate: $LINT"
-          echo "  - test-python: $PYTEST"
-          echo "  - test-node: $NODE"
-          echo "  - security-audit: $SECURITY"
+          echo "  - secret-scan:       $SECRETS"
+          echo "  - test-python:       $PYTEST"
+          echo "  - test-node:         $NODE"
+          echo "  - security-audit:    $SECURITY"
           
-          if [ "$LINT" != "success" ] || [ "$PYTEST" != "success" ] || [ "$NODE" != "success" ] || [ "$SECURITY" != "success" ]; then
+          if [ "$LINT" != "success" ] || [ "$SECRETS" != "success" ] || [ "$PYTEST" != "success" ] || [ "$NODE" != "success" ] || [ "$SECURITY" != "success" ]; then
             echo "ERROR: One or more CI stages failed or did not succeed!"
             exit 1
           fi

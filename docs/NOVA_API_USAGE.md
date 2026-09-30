@@ -1,71 +1,42 @@
-# Nova API Usage Guide
+# Nova API usage — source-of-truth notice
 
-## 1. What Is the Aczen Nova API?
-The Aczen Nova API is a real financial data API providing actual merchant payment records. It allows our system to ingest authentic data structures that closely mimic what enterprise accounting systems see in production.
+**Status:** This page is not the API contract. The old examples and claims in this file were superseded and must not be used to implement or describe a production Nova integration.
 
-## 2. Our Configuration:
-- Base URL: https://www.aczen.in/nova-api/v1
-- 4 endpoints we call: /payments, /gateway-transactions, /bank-transactions, /settlements
-- API key: configured via NOVA_API_KEY environment variable
-- Fallback: if key not set, the system uses J.P. Morgan-style synthetic data automatically
+## Authoritative project references
 
-## 3. What Each Endpoint Gives Us:
-- /payments: merchant's internal order records — order IDs, customer references, amounts in paise, timestamps
-- /gateway-transactions: payment processor captures — gateway payment IDs, MDR fee (2%), GST (18%), captured amounts, settlement IDs, refund references
-- /bank-transactions: bank clearing entries — UTR codes, credit amounts, settlement reference codes in narration text (e.g. CMS/NACH/SETTL/...)
-- /settlements: lump-sum payout bundles — settlement IDs grouping multiple gateway transactions into one bank credit
+- [FIN-11 Main Guide](fin11/FIN-11_0_Main_Guide_End_to_End.md)
+- [FIN-11 Data Guide: Nova and Synthetic](fin11/FIN-11_1_Data_Guide_Nova_and_Synthetic.md)
+- [FIN-11 Backend Guide](fin11/FIN-11_3_Backend_Guide.md)
+- [FIN-11 Frontend Guide](fin11/FIN-11_5_Frontend_Guide.md)
+- [Antigravity rebuild brief](ANTIGRAVITY_REBUILD_BRIEF.md)
 
-## 4. How We Use the Nova Data in Our Engine:
-- Nova data flows through all 7 reconciliation stages
-- The UTR codes from /bank-transactions are critical for Stage 2 (Reference Match)
-- The MDR fee from /gateway-transactions is critical for Stage 4 (Fee Calculation)
-- The settlement IDs from /settlements are critical for Stage 6 (Settlement Match)
+If the current provider contract disagrees with these project guides, verify the provider's official documentation and update the contract in a reviewed change before changing implementation. Do not invent fields, endpoints, or authentication headers.
 
-## 5. The Unfair Advantage:
-Most hackathon teams generate random CSV files with made-up numbers. LedgerSense uses the Aczen Nova API — a real digital commerce accounting platform used in production. This gives us real-world financial structures: actual MDR fee schedules used by Indian payment processors, real T+2 settlement windows, authentic UTR narration formats that Indian banks generate, and realistic refund-to-capture linkages. Our reconciliation engine is tested against data that behaves exactly like a real Razorpay or PayU integration — not a spreadsheet someone made up at 2 AM.
+## Verified status as of 2026-10-01
 
-## 6. What Happens Without Nova API:
-- The NOVA_API_KEY env variable is not set → system automatically falls back to J.P. Morgan synthetic data
-- The reconciliation engine still runs correctly with 4 orders (ORD-101 to ORD-104)
-- But fee structures are simpler, UTR formats are generic, and settlement bundles are smaller
-- For production: always configure NOVA_API_KEY for real-world accuracy
+- The configured base URL is `https://www.aczen.in/nova-api/v1`.
+- An unauthenticated `GET /health` returned HTTP 200 with `{"status":"ok"}` during review. This proves only that the public health endpoint was reachable; it does **not** verify a key, dataset access, imports, or persistence.
+- In the checked-in source at commit `ae36dbc`, `api/src/novaClient.ts` still returns fixed example records, and its status response can describe the connection as live without making an authenticated upstream request.
+- The frontend's `frontend/src/api/nova.ts` contains a static fallback that can be labelled as an Aczen/Nova source after an error. That fallback must never be used or presented as Nova data in production.
+- The user reports Nova may now be working. This Sandbox had no `NOVA_API_KEY`; the public Vercel `/api/nova/status` and `/api/health` routes returned 404 during review. That does not prove the Railway API is down, but neither does visible UI data prove a successful import: the checked-in client can return fixtures after an API failure. Before changing Nova code, identify the actual runtime `API_BASE`, make a successful authenticated read/import to the currently configured backend, and preserve the verified connector. Record clearly if this runtime verification cannot be performed.
+- Do not send a key in chat, commit it, include it in a screenshot, or put it in a `VITE_*`/browser variable.
 
-## 7. Sample Nova Endpoint Response Structure:
-A sample response for `/payments`:
-```json
-[
-  {
-    "order_id": "ORD-101",
-    "customer_ref": "CUST-A",
-    "amount_paise": 100000,
-    "timestamp": "2023-10-01T10:00:00Z"
-  }
-]
-```
+## Production rules
 
-A sample response for `/gateway-transactions`:
-```json
-[
-  {
-    "gateway_id": "PAY-101",
-    "order_ref": "ORD-101",
-    "captured_amount_paise": 100000,
-    "fee_paise": 2000,
-    "tax_paise": 360,
-    "settlement_id": "SET-1",
-    "refund_ref": null
-  }
-]
-```
+1. Keep the provider credential only in the server-side API deployment's secret variables (for example, Railway Variables). The browser must call the LedgerSense API, never Nova directly.
+2. Distinguish provider reachability from successful authentication and from a successful data import. Show an accurate connection state and the time/source of the last verified import.
+3. Do not silently fall back to seeded, generated, or cached example rows after an upstream failure. Return a clear error state. An empty provider dataset is an empty state, not a prompt to fill the screen with demo values.
+4. Keep deterministic fixtures only in tests or in an explicitly selected, visibly labelled local development mode. Never tag fixtures or simulator output as a Nova import.
+5. Preserve provenance for every imported batch and record: source name, provider dataset/slice when available, import/run IDs, imported time, as-of date, record counts, rejected-record counts, and the reconciliation rule/config version.
+6. Do not state that a dataset is real or synthetic unless the provider's current documentation identifies it that way; use the provider's own provenance label.
+7. Do not log authorization headers, API keys, raw sensitive payloads, or full customer data. Redact request and error logs.
 
----
+## Safe verification sequence
 
-## 8. How Aczen Nova Pairs with J.P. Morgan's Research Paper
-Our data architecture fuses the real-world accounting contracts of **Aczen Nova** with the mathematical rigor of **J.P. Morgan AI Research** (*Assefa et al., "Generating Synthetic Multi-Source Financial Datasets for Reconciliation", ACM ICAIF 2020*):
+1. Check the public `/health` endpoint without a key.
+2. Configure `NOVA_API_KEY` only in the API service's private environment. Follow the provider's current documentation for the authentication scheme, permissions, limits, pagination, and response schema.
+3. From the API service, verify authenticated metadata and a small read-only sample without printing the key or full records.
+4. Run an import into a staging database, verify persisted counts and provenance, restart the service, then confirm the batch and its records remain available.
+5. Test invalid/missing credentials and upstream timeouts. The UI must show an actionable unavailable/error state and must not display sample rows as live data.
 
-1. **Enterprise Realism via Aczen Nova**: Nova provides the canonical data schemas for live digital commerce—capturing merchant order references, PSP fee structures (2% MDR + 18% GST), and bank UTR codes.
-2. **Stress-Testing via J.P. Morgan Methodology**: The J.P. Morgan research methodology gives us a mathematical blueprint to inject realistic banking frictions:
-   - **Multi-Source Event Topologies**: Event propagation across ERP, PSP, Core Banking, and Settlement systems.
-   - **Settlement Lag Distributions**: Differentiating harmless T+2 timing float (`TIMING_LAG`) from genuine missing deposits (`MISSING_BANK_CREDIT`).
-   - **Narration Scrambling**: Simulating how core banking networks strip delimiters and truncate references.
-   - **Ground-Truth Benchmarks**: Guaranteeing that every test case in our suite has a deterministic mathematical baseline.
+For implementation order, acceptance criteria, and the Railway/Vercel routing checks, use the [Antigravity rebuild brief](ANTIGRAVITY_REBUILD_BRIEF.md).

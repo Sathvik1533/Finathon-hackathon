@@ -88,9 +88,6 @@ psql "$DATABASE_URL" -f db/seed/seed.sql
 
 ## 4. Connecting the Backend API
 
-Set the environment variable in `api/.env`:
-```env
-DATABASE_URL="postgresql://postgres:[YOUR-PASSWORD]@db.[YOUR-PROJECT-REF].supabase.co:5432/postgres"
-```
+Set `DATABASE_URL` in the git-ignored `api/.env` using the rotated connection string from your provider. Never commit the value or paste it into chat, logs, or prompts.
 
 For environments where Supabase or PostgreSQL is offline during development or CI, the backend includes an automatic **In-Memory / SQLite Repository Adapter** that mirrors the exact same schema and operations, allowing tests and local development to run smoothly.

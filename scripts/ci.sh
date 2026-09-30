@@ -67,12 +67,18 @@ else
   echo "  ✓ Python compilation syntax check passed."
 fi
 
-echo -e "\n[5/5] Executing Pytest Test Suite..."
+echo -e "\n[5/6] Executing Pytest Test Suite..."
 TEST_TARGETS="tests"
 if [ -d ai/tests ]; then
   TEST_TARGETS="$TEST_TARGETS ai/tests"
 fi
 python3 -m pytest $TEST_TARGETS -v
+
+echo -e "\n[6/6] Executing Node.js TypeScript API Test Suite..."
+if [ -d api ]; then
+  (cd api && node dist/test_api.js)
+  echo "  ✓ Node.js Express API test suite passed."
+fi
 
 echo -e "\n======================================================"
 echo "  ✓ ALL LOCAL CI CHECKS PASSED SUCCESSFULLY!          "

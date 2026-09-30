@@ -1,65 +1,100 @@
-# FIN11 Master Parent Guide
+# FIN-11 Master Parent Guide
 
-## Section 1: What This Document Is About
-This document is for teammates and evaluators to understand the complete end-to-end architecture and flow of the FIN-11 LedgerSense reconciliation engine. It covers the frontend, backend, database, the unfair advantage provided by the Aczen Nova API, and a complete user journey, all explained in simple, plain English without unnecessary technical jargon.
+## 1. What Is This Document?
+This document is the master plain English guide for LedgerSense, our FIN-11 solution. It explains our technology choices, architectural decisions, and the user journey without using any complex jargon, making it easy for non-technical team members to read aloud and understand exactly how our system works end-to-end.
 
-## Section 2: Frontend — What We Built and Why
-- **What is the frontend?** The frontend is the part of the application that users see, interact with, and click on.
-- **What did we choose?** We chose React and Tailwind CSS. React is a tool for building interactive user interfaces, and Tailwind CSS is a styling tool that helps us make the application look good quickly.
-- **Why React for finance?** React offers excellent advantages for financial applications: it allows for component reuse, ensures fast updates without page reloads, provides type safety, and makes integrating secure logins (JWT) very easy.
-- **What can users do on it?**
-  1. **Login screen:** Users securely log in using an admin or reviewer account.
-  2. **Dashboard:** Users view 4 key performance indicators, track the 7-stage pipeline progress, and click a button to trigger reconciliation.
-  3. **Multi-Stream Timeline:** Users select specific orders to see 4 data streams side by side.
-  4. **Nova 4-Source Explorer:** Users view all 4 data tables directly fetched from the Aczen Nova feeds.
-  5. **Exceptions Queue:** Users view a sortable table of issues and can click a Review button to approve, reject, or escalate them.
-  6. **Settlement Matcher:** Users visualize how many individual transactions match into a single bulk settlement batch.
-  7. **Recon Report:** Users view a summary of the module coverage (11/11) and can export the data as a CSV file.
-- **What libraries did we add?** We added React Bits for smooth animation primitives and transition cards, and Aceternity UI for subtle, enterprise-feeling floating cards and spotlights.
-- **Where does Aczen Nova API show up in the frontend?** The Nova 4-Source Explorer screen shows live data from Aczen Nova's `/payments`, `/gateway-transactions`, `/bank-transactions`, and `/settlements` endpoints. Without Nova API, users would only see fake static numbers with no real-world financial behavior.
+## 2. The Problem We Are Solving
+The 4-way reconciliation nightmare happens when one single customer payment exists across four completely disconnected records: the merchant's internal order, the payment gateway's capture, the bank's transaction statement, and the final bulk settlement payout. When these systems don't perfectly align—due to missing fees, timing lags, or missing records—the CFO cannot verify payout accuracy, and the company silently loses money.
 
-## Section 3: Backend — What We Built and Why
-- **What is the backend?** The backend is the hidden engine that does all the heavy lifting, calculations, and data processing behind the scenes.
-- **What did we choose?** We chose Node.js, Express, and TypeScript. Node.js runs the engine, Express handles the web requests, and TypeScript ensures the code is strictly typed and error-free.
-- **Why these for finance?** They provide exact integer math preventing rounding errors, strong type safety, and very fast processing speeds.
-- **What does it do?** It exposes 12 API endpoints that handle everything from user login, triggering reconciliations, viewing exceptions, updating decisions, to generating reports.
-- **The 7-stage reconciliation engine:**
-  1. Stage 1 matches orders one-to-one using unique IDs.
-  2. Stage 2 parses messy bank descriptions to find the exact reference numbers.
-  3. Stage 3 handles partial matches by comparing amounts and dates within a safe range.
-  4. Stage 4 calculates the exact fees to ensure the gateway hasn't overcharged.
-  5. Stage 5 processes refunds to make sure they were correctly credited.
-  6. Stage 6 groups many individual payments into one large settlement block.
-  7. Stage 7 ranks all the problems it found so humans can fix the biggest risks first.
-- **Redis cache:** It acts as a fast, temporary memory that prevents two users from running the engine at the same time and stores the final results so the page loads instantly.
-- **Where is Aczen Nova API used in backend?** The backend calls Nova's 4 endpoints to get the real financial data before running the 7-stage engine. Without Nova, we'd have to make up the numbers ourselves, which wouldn't reflect real payment gateway behavior like MDR fees, T+2 settlement windows, etc.
+## 3. Frontend — What Users See
+- What we chose: React with Vite, TypeScript, Tailwind CSS. Being rebuilt from the current prototype as a proper modular app.
+- Why React for finance: fast updates without page reload, type safety prevents bugs with money data, easy to add new screens.
+- The 7 screens: 
+  - Login: Secures access to the system.
+  - Dashboard: A top-level view of all payment health metrics.
+  - Timeline: Tracks individual payment lifecycles.
+  - Nova Explorer: Connects live to Aczen Nova's financial feeds.
+  - Exceptions Queue: Lists problem transactions needing human review.
+  - Settlement Matcher: Confirms payout bundles.
+  - Recon Report: Shows the complete health check of all modules.
+- Where Nova API shows up in the frontend: the Nova Explorer screen calls Aczen Nova's 4 endpoints live.
+- What happens if Nova API is missing from frontend: the explorer shows only static synthetic data, no real-world fee structures.
 
-## Section 4: Database — What We Built and Why
-- **What is the database?** The database is the secure vault where all the results and records are saved permanently.
-- **What did we choose?** We chose Supabase PostgreSQL.
-- **Why PostgreSQL for finance?** It guarantees exact precision for currency using NUMERIC(18,4), enforces Row Level Security so users only see what they should, and maintains immutable audit logs.
-- **DB Schema:**
-  - `finathon_runs`: Stores each reconciliation run, showing when it happened, how many records were checked, and how many discrepancies were found.
-  - `finathon_exceptions`: Stores each individual discrepancy found, including what type of issue it is, the money at risk, and the decision made to fix it.
-  - `finathon_audit_log`: Stores every action taken, like who approved or rejected what and exactly when. This table can NEVER be edited or deleted.
-- **The immutable audit trigger:** Once a decision is recorded, it stays forever. No one can delete or change it.
+## 4. Backend — The Engine Behind the Scenes
+- What we chose: Node.js, Express, TypeScript.
+- Why for finance: handles integer paise (no floating-point rounding errors), fast enough to process thousands of transactions in under 120ms, TypeScript catches type errors before they touch money data.
+- All 12 endpoints:
+  - POST /api/auth/login — JWT login (admin/admin123, reviewer/reviewer123)
+  - GET /api/health — system health + Redis mode + DB status
+  - GET /api/nova/sync — fetch all 4 Aczen Nova data streams
+  - POST /api/reconcile/run — trigger 7-stage reconciliation engine
+  - GET /api/cases — list all exception cases
+  - POST /api/cases/:id/decision — approve/reject/escalate a case
+  - GET /api/settlements — list settlement batches
+  - GET /api/audit-logs — full immutable audit trail
+  - GET /api/report — Module 11 full reconciliation report (JSON)
+  - GET /api/report?format=csv — download CSV export
+  - GET /api/db/status — database health + record counts
+  - GET /api/deployment/status — deployment info
+- The 7-stage engine:
+  - Stage 1: Transaction-ID Match — exact order_ref equality (Confidence: 1.0)
+  - Stage 2: Reference Match — normalized string + UTR regex from bank narrations (Confidence: 0.98)
+  - Stage 3: Partial Match — weighted score (amount 50% + date 20% + reference 30%, threshold ≥ 0.90)
+  - Stage 4: Fee Calculation — recomputes MDR (2%) + GST (18%); flags FEE_MISMATCH if variance > ₹1
+  - Stage 5: Refund/Reversal — links refund IDs to parent captures; flags TIMING_LAG vs MISSING_BANK_CREDIT
+  - Stage 6: Settlement Match — groups 1:N gateway transactions into settlement bundles; verifies bank credit
+  - Stage 7: Risk Ranking — sorts all exceptions strictly by rupee exposure (highest first)
+- Redis explained in plain English: prevents two people from running reconciliation simultaneously (mutex lock); caches the last result so the page loads instantly.
+- Where Nova API is used in backend: the /api/nova/sync endpoint calls Aczen Nova's 4 feeds to get the real financial data before running the engine.
 
-## Section 5: Nova API — Unfair Advantage
-- **What is the Aczen Nova API?** It is a real financial data API from Aczen.in that gives us actual merchant payment records.
-- **What are its 4 data streams and what does each one give us?**
-  1. **Payments:** Internal merchant orders and expected amounts.
-  2. **Gateway Transactions:** Authorization captures with exact contractual MDR fee and GST splits.
-  3. **Bank Transactions:** Actual bank clearing statements with messy UTR settlement narrations.
-  4. **Settlements:** Gateway batch settlement advices with gross-to-net payout breakdowns.
-- **Why is it an unfair advantage?** Most hackathon teams use random fake data; we use real-world financial structures with actual MDR fee schedules, real settlement narration formats, and real T+2 latency behavior.
-- **What happens without Nova API?** The reconciliation engine still runs but on generic synthetic data. The fee mismatches, UTR narrations, and settlement batch structures won't reflect real Indian payment gateway behavior.
+## 5. Database — Where Everything Is Saved
+- What we chose: Supabase PostgreSQL.
+- Why for finance: exact decimal precision (NUMERIC(18,4) — no penny rounding errors), access control per user role, tamper-proof audit log.
+- The 3 tables in plain English:
+  - finathon_runs: stores each time someone runs a reconciliation (when, how many records, how many problems found)
+  - finathon_exceptions: stores each individual discrepancy (what type, how much money is at risk, what decision the reviewer made)
+  - finathon_audit_log: stores every action permanently (who approved/rejected what and when — this CANNOT be deleted or changed, ever)
+- The immutable rule: once a decision is logged, the database trigger blocks any update or delete. Like a financial ledger.
 
-## Section 6: End-to-End User Journey (Step by Step)
-Step 1: Priya opens the app and sees the clean, enterprise-grade login screen.
-Step 2: She logs in with admin/admin123, which securely creates a JWT token in the backend to identify her.
-Step 3: She goes to the Nova 4-Source Explorer and clicks Sync Nova Feeds, which makes API calls to pull real data from Aczen Nova.
-Step 4: She goes to the Dashboard and clicks Trigger Reconciliation, firing the 7 stages and instantly showing the results.
-Step 5: She sees 2 exceptions and clicks on the FEE_MISMATCH for ORD-103 to read the AI policy explanation.
-Step 6: She clicks Approve and writes a note, which sends an API call to permanently save her decision to the database.
-Step 7: She goes to the Audit Trail and sees her decision logged permanently, protected by the immutable trigger.
-Step 8: She goes to the Recon Report tab and clicks Export CSV to download the final summary directly from `/api/report?format=csv`.
+## 6. The Nova API — Our Unfair Advantage
+- What it is: a real financial data API from Aczen.in that provides actual merchant payment records.
+- The 4 data streams:
+  - /payments: internal merchant orders with customer IDs and expected amounts
+  - /gateway-transactions: payment processor records with real 2% MDR fee schedules and 18% GST
+  - /bank-transactions: bank clearing statements with real UTR codes and settlement narrations
+  - /settlements: lump-sum payout bundles grouping multiple orders
+- Why it is an unfair advantage: most hackathon teams use random fake numbers. We use real-world financial structures — actual MDR fee schedules, real T+2 settlement windows, authentic bank narration formats. This makes our discrepancy detection realistic.
+- What happens without it: the engine still runs on J.P. Morgan synthetic data, but fee mismatches and UTR patterns won't reflect real Indian payment gateway behavior.
+
+## 7. All 11 FIN-11 Implementation Modules
+| # | Module Name | What It Does Simply | Where to See It |
+|---|---|---|---|
+| M1 | Internal Transaction Records | Tracks internal merchant orders | Nova Explorer & Timeline |
+| M2 | Payment Gateway Records | Tracks gateway captures and fees | Nova Explorer & Timeline |
+| M3 | Bank Settlement Records | Tracks actual bank deposits | Nova Explorer & Timeline |
+| M4 | Transaction-ID Matching | Exact matching on unique IDs | Engine Stage 1 |
+| M5 | Reference Matching | Matching using normalized UTR codes | Engine Stage 2 |
+| M6 | Partial Matching | Weighted fuzzy matching | Engine Stage 3 |
+| M7 | Fee Calculation | Validates charged vs expected fees | Engine Stage 4 & Exceptions |
+| M8 | Refund/Reversal Handling | Tracks refunds to original orders | Engine Stage 5 |
+| M9 | Settlement Matching | Groups transactions to bulk payouts | Engine Stage 6 & Settlement Matcher |
+| M10 | Exception Management | Workflow for manual human review | Exceptions Queue |
+| M11 | Reconciliation Report | Generates health and export data | Recon Report Tab |
+
+## 8. End-to-End User Journey
+Priya, a finance operations officer at Acme Retail India, is on her first day on the job.
+Step 1: Opens the app — sees login screen.
+Step 2: Logs in with admin/admin123 — JWT token is created, she lands on Dashboard.
+Step 3: Goes to Nova Explorer, clicks Sync Nova Feeds — app calls Aczen Nova's 4 endpoints, tables fill up with real payment data.
+Step 4: Goes to Dashboard, clicks Trigger Reconciliation — the 7-stage engine runs, she watches stages complete in real time.
+Step 5: Dashboard shows 2 exceptions flagged. She clicks to the Exceptions Queue tab.
+Step 6: She clicks on the FEE_MISMATCH exception on ORD-103 — a panel opens showing: expected fee ₹23.60, actual fee charged ₹40.00, difference ₹16.40. She reads the policy note.
+Step 7: She clicks Approve and types a short note — the app calls the API, the decision is saved.
+Step 8: She clicks Audit Trail — sees her own decision logged with timestamp, username, and note. She cannot delete it.
+Step 9: She clicks Recon Report — sees all 11 module coverage badges green, clicks Export CSV — a spreadsheet downloads.
+
+## 9. Future Roadmap
+- AI anomaly detection.
+- Razorpay AI payment insights.
+- AWS ECS/RDS for production scale.
+- Real-time webhook ingestion.

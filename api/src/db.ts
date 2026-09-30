@@ -1,12 +1,22 @@
 import { Pool } from 'pg';
 import { config } from './config';
 
+const needsSsl = Boolean(
+  config.databaseUrl && (
+    config.databaseUrl.includes('supabase.co') ||
+    config.databaseUrl.includes('rds.amazonaws.com') ||
+    config.databaseUrl.includes('railway.app') ||
+    config.databaseUrl.includes('sslmode=require') ||
+    process.env.PGSSLMODE === 'require'
+  )
+);
+
 export const pool = new Pool({
   connectionString: config.databaseUrl,
-  ssl: config.databaseUrl && config.databaseUrl.includes('supabase.co') ? { rejectUnauthorized: false } : undefined,
+  ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
   max: 5,
   idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 3000,
 });
 
 pool.on('error', (err) => {

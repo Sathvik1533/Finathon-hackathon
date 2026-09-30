@@ -100,7 +100,7 @@
           <div class="flex items-center gap-2">
             <span class="font-bold tracking-tight text-white text-base">LedgerSense</span>
             <span class="bg-cyan-500/10 text-cyan-400 text-[10px] px-2 py-0.5 rounded-full border border-cyan-500/30 font-semibold tracking-wide">FIN-11 PRODUCTION</span>
-            <span id="api-status-badge" class="flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono">
+            <span id="api-status-badge" onclick="promptChangeApiUrl()" title="Click to view or change Backend API URL (Railway / AWS / Local)" class="cursor-pointer hover:brightness-125 transition flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono">
               <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 ping-dot"></span>
               <span id="api-status-text">CONNECTING API...</span>
             </span>
@@ -989,6 +989,24 @@
       caseModal.close();
     }
 
+    function promptChangeApiUrl() {
+      const current = localStorage.getItem('FINATHON_API_BASE') || (API_BASE || 'Auto / Relative');
+      const newUrl = prompt(
+        'LedgerSense Backend API Configuration:\n\n' +
+        'Current target: ' + current + '\n\n' +
+        'Enter your Railway Backend URL (e.g. https://api-finathon.up.railway.app), AWS ALB URL, or leave empty for auto/relative:',
+        current === 'Auto / Relative' ? '' : current
+      );
+      if (newUrl !== null) {
+        if (newUrl.trim() === '') {
+          localStorage.removeItem('FINATHON_API_BASE');
+        } else {
+          localStorage.setItem('FINATHON_API_BASE', newUrl.trim().replace(/\/$/, ''));
+        }
+        window.location.reload();
+      }
+    }
+
     // Connect to Node.js Backend API
     async function initApiConnection() {
       const statusBadge = document.getElementById('api-status-badge');
@@ -1002,7 +1020,15 @@
           const healthData = await healthRes.json();
           isApiConnected = true;
           statusBadge.className = 'flex items-center gap-1.5 bg-emerald-500/10 text-emerald-400 text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono';
-          statusText.innerText = 'NODE API ACTIVE (4000)';
+          let backendLabel = 'NODE API ACTIVE (4000)';
+          if (API_BASE.includes('railway.app')) {
+            backendLabel = 'RAILWAY API CONNECTED';
+          } else if (API_BASE.includes('amazonaws.com') || API_BASE.includes('elb.')) {
+            backendLabel = 'AWS ALB CONNECTED';
+          } else if (API_BASE) {
+            backendLabel = 'CLOUD API ACTIVE';
+          }
+          statusText.innerText = backendLabel;
 
           if (dbBadge && dbText) {
             if (healthData.database && healthData.database.ok) {

@@ -64,6 +64,54 @@ app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
     database: dbHealth,
     nova: novaStatus,
     redis: redisStatus,
+    cloud: {
+      awsTopology: 'ECS Fargate + ALB + S3 + DynamoDB + Bedrock',
+      region: config.awsRegion,
+      s3Bucket: config.s3Bucket,
+      dynamoTable: config.dynamoTable,
+      bedrockModel: config.bedrockModelId,
+      evaluationTarget: 'Vercel (web) + Railway (api & redis) + Supabase (db)',
+    },
+  });
+});
+
+app.get(['/api/cloud/status', '/api/aws/status'], (req: Request, res: Response) => {
+  res.json({
+    productionCloud: {
+      provider: 'Amazon Web Services (AWS)',
+      topology: 'AWS ECS Fargate + ALB + S3 + DynamoDB + Bedrock',
+      region: config.awsRegion,
+      compute: {
+        type: 'AWS ECS Fargate',
+        containerPort: config.port,
+        autoScaling: '2-10 tasks',
+        healthCheckPath: '/api/health',
+      },
+      networking: {
+        loadBalancer: 'Application Load Balancer (ALB)',
+        vpc: 'Multi-AZ Public & Private Subnets (us-east-1a, us-east-1b)',
+      },
+      storage: {
+        s3Bucket: config.s3Bucket,
+        encryption: 'SSE-S3 / SSE-KMS',
+        corsEnabled: true,
+      },
+      locking: {
+        dynamoDbTable: config.dynamoTable,
+        redisFallback: redisCache.getStatus(),
+      },
+      ai: {
+        provider: 'Amazon Bedrock',
+        modelId: config.bedrockModelId,
+        guardrails: ['G1-Input-Sanitization', 'G2-PII-Masking', 'G3-Read-Only-Rationale', 'G4-Zero-Financial-Execution', 'G5-Immutable-Audit'],
+      },
+    },
+    fastEvaluation: {
+      frontend: 'Vercel (vercel.json, cleanUrls, outputDirectory: web)',
+      backend: 'Railway (railway.json, nixpacks.toml, Procfile)',
+      redis: 'Railway Managed Redis (REDIS_URL)',
+      database: 'Supabase PostgreSQL (pgcrypto, Row-Level Security, Arbitrary Precision)',
+    },
   });
 });
 

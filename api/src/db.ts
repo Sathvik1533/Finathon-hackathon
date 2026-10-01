@@ -1,28 +1,43 @@
 import { Pool } from 'pg';
 import { config } from './config';
 
-const needsSsl = Boolean(
-  config.databaseUrl && (
-    config.databaseUrl.includes('supabase.co') ||
-    config.databaseUrl.includes('rds.amazonaws.com') ||
-    config.databaseUrl.includes('railway.app') ||
-    config.databaseUrl.includes('sslmode=require') ||
-    process.env.PGSSLMODE === 'require'
-  )
-);
+let poolInstance: Pool | null = null;
+let currentDbUrl: string = '';
 
-export const pool = new Pool({
-  connectionString: config.databaseUrl || undefined,
-  ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-  max: 5,
-  idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 3000,
-});
+export function getPool(): Pool {
+  const dbUrl = config.databaseUrl || process.env.DATABASE_URL || '';
+  if (!poolInstance || currentDbUrl !== dbUrl) {
+    currentDbUrl = dbUrl;
+    const needsSsl = Boolean(
+      dbUrl && (
+        dbUrl.includes('supabase.co') ||
+        dbUrl.includes('rds.amazonaws.com') ||
+        dbUrl.includes('railway.app') ||
+        dbUrl.includes('pooler.supabase.com') ||
+        dbUrl.includes('sslmode=require') ||
+        process.env.PGSSLMODE === 'require'
+      )
+    );
+    poolInstance = new Pool({
+      connectionString: dbUrl || undefined,
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+      max: 5,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 3000,
+    });
+    poolInstance.on('error', (err) => {
+      // Prevent unhandled error event crashes when DB is unreachable
+      const sanitized = (err.message || '').replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, 'postgresql://REDACTED@HOST');
+      console.warn(`[PG Pool Error] ${sanitized}`);
+    });
+  }
+  return poolInstance;
+}
 
-pool.on('error', (err) => {
-  // Prevent unhandled error event crashes when DB is unreachable
-  const sanitized = (err.message || '').replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, 'postgresql://REDACTED@HOST');
-  console.warn(`[PG Pool Error] ${sanitized}`);
+export const pool = new Proxy({} as Pool, {
+  get(_target, prop) {
+    return (getPool() as any)[prop];
+  }
 });
 
 export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {

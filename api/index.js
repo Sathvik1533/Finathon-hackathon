@@ -28538,38 +28538,80 @@ import_dotenv.default.config();
 var isProduction = process.env.NODE_ENV === "production";
 var isTest = process.env.NODE_ENV === "test";
 var serverConfig = {
-  port: parseInt(process.env.PORT || "4000", 10),
-  jwtSecret: process.env.JWT_SECRET || (isTest ? "test-mode-only-secret" : ""),
-  databaseUrl: process.env.DATABASE_URL || "",
-  novaApiKey: process.env.NOVA_API_KEY || "",
-  novaBaseUrl: process.env.NOVA_BASE_URL || "https://www.aczen.in/nova-api/v1",
-  adminUsername: process.env.ADMIN_USERNAME || (isProduction ? "" : "admin"),
-  adminPassword: process.env.ADMIN_PASSWORD || (isTest ? "admin123" : ""),
-  demoMerchantId: process.env.DEMO_MERCHANT_ID || "m_demo_finathon",
-  redisUrl: process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL || "",
-  awsRegion: process.env.AWS_REGION || "us-east-1",
-  s3Bucket: process.env.S3_BUCKET_NAME || "finathon-ledgersense-artifacts",
-  dynamoTable: process.env.DYNAMODB_TABLE_NAME || "finathon-reconcile-locks",
-  bedrockModelId: process.env.BEDROCK_MODEL_ID || "amazon.nova-pro-v1:0",
-  novaMode: process.env.NODE_ENV === "production" && process.env.NOVA_MODE === "demo" ? "unconfigured" : process.env.NOVA_MODE || "unconfigured"
+  get port() {
+    return parseInt(process.env.PORT || "4000", 10);
+  },
+  get jwtSecret() {
+    return process.env.JWT_SECRET || (process.env.NODE_ENV === "test" ? "test-mode-only-secret" : "");
+  },
+  get databaseUrl() {
+    return process.env.DATABASE_URL || "";
+  },
+  get novaApiKey() {
+    return process.env.NOVA_API_KEY || "";
+  },
+  get novaBaseUrl() {
+    return process.env.NOVA_BASE_URL || "https://www.aczen.in/nova-api/v1";
+  },
+  get adminUsername() {
+    return process.env.ADMIN_USERNAME || (process.env.NODE_ENV === "production" ? "" : "admin");
+  },
+  get adminPassword() {
+    return process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === "test" ? "admin123" : "");
+  },
+  get demoMerchantId() {
+    return process.env.DEMO_MERCHANT_ID || "m_demo_finathon";
+  },
+  get redisUrl() {
+    return process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL || "";
+  },
+  get awsRegion() {
+    return process.env.AWS_REGION || "us-east-1";
+  },
+  get s3Bucket() {
+    return process.env.S3_BUCKET_NAME || "finathon-ledgersense-artifacts";
+  },
+  get dynamoTable() {
+    return process.env.DYNAMODB_TABLE_NAME || "finathon-reconcile-locks";
+  },
+  get bedrockModelId() {
+    return process.env.BEDROCK_MODEL_ID || "amazon.nova-pro-v1:0";
+  },
+  get novaMode() {
+    return process.env.NODE_ENV === "production" && process.env.NOVA_MODE === "demo" ? "unconfigured" : process.env.NOVA_MODE || "unconfigured";
+  }
 };
 var config = serverConfig;
 
 // api/src/db.ts
 var import_pg = require("pg");
-var needsSsl = Boolean(
-  config.databaseUrl && (config.databaseUrl.includes("supabase.co") || config.databaseUrl.includes("rds.amazonaws.com") || config.databaseUrl.includes("railway.app") || config.databaseUrl.includes("sslmode=require") || process.env.PGSSLMODE === "require")
-);
-var pool = new import_pg.Pool({
-  connectionString: config.databaseUrl || void 0,
-  ssl: needsSsl ? { rejectUnauthorized: false } : void 0,
-  max: 5,
-  idleTimeoutMillis: 1e4,
-  connectionTimeoutMillis: 3e3
-});
-pool.on("error", (err) => {
-  const sanitized = (err.message || "").replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, "postgresql://REDACTED@HOST");
-  console.warn(`[PG Pool Error] ${sanitized}`);
+var poolInstance = null;
+var currentDbUrl = "";
+function getPool() {
+  const dbUrl = config.databaseUrl || process.env.DATABASE_URL || "";
+  if (!poolInstance || currentDbUrl !== dbUrl) {
+    currentDbUrl = dbUrl;
+    const needsSsl = Boolean(
+      dbUrl && (dbUrl.includes("supabase.co") || dbUrl.includes("rds.amazonaws.com") || dbUrl.includes("railway.app") || dbUrl.includes("pooler.supabase.com") || dbUrl.includes("sslmode=require") || process.env.PGSSLMODE === "require")
+    );
+    poolInstance = new import_pg.Pool({
+      connectionString: dbUrl || void 0,
+      ssl: needsSsl ? { rejectUnauthorized: false } : void 0,
+      max: 5,
+      idleTimeoutMillis: 1e4,
+      connectionTimeoutMillis: 3e3
+    });
+    poolInstance.on("error", (err) => {
+      const sanitized = (err.message || "").replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, "postgresql://REDACTED@HOST");
+      console.warn(`[PG Pool Error] ${sanitized}`);
+    });
+  }
+  return poolInstance;
+}
+var pool = new Proxy({}, {
+  get(_target, prop) {
+    return getPool()[prop];
+  }
 });
 async function checkDbHealth() {
   if (!config.databaseUrl) {
@@ -28894,10 +28936,24 @@ var NovaClient = class {
       this.lastStatus.reachable = false;
     }
   }
+  getApiKey() {
+    return (this.apiKey || process.env.NOVA_API_KEY || config.novaApiKey || "").trim();
+  }
+  getBaseUrl() {
+    let url = (this.baseUrl || process.env.NOVA_BASE_URL || config.novaBaseUrl || "https://www.aczen.in/nova-api/v1").trim();
+    if (url.includes("aczen.in") && !url.includes("www.aczen.in")) {
+      url = url.replace("aczen.in", "www.aczen.in");
+    }
+    return url.replace(/\/$/, "");
+  }
   getStatus() {
+    const key = this.getApiKey();
+    const isConfigured = Boolean(key && key.length > 0) || this.lastStatus.mode === "test_fixture";
     return {
       ...this.lastStatus,
-      configured: Boolean(this.apiKey && this.apiKey.trim().length > 0) || this.lastStatus.mode === "test_fixture"
+      baseUrl: this.getBaseUrl(),
+      configured: isConfigured,
+      mode: isConfigured ? this.lastStatus.authenticated ? "live_authenticated" : "reachable_unauthenticated" : "unconfigured"
     };
   }
   setLastImport(importInfo) {
@@ -28912,7 +28968,7 @@ var NovaClient = class {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await this.fetchFn(`${this.baseUrl}/health`, {
+      const res = await this.fetchFn(`${this.getBaseUrl()}/health`, {
         method: "GET",
         headers: { Accept: "application/json" },
         signal: controller.signal
@@ -28937,7 +28993,8 @@ var NovaClient = class {
       this.lastStatus.datasetSlice = "synthetic_test_slice";
       return { authenticated: true, teamSlot: "fixture_test_slot", datasetSlice: "synthetic_test_slice" };
     }
-    if (!this.apiKey) {
+    const key = this.getApiKey();
+    if (!key) {
       this.lastStatus.authenticated = false;
       this.lastStatus.mode = "unconfigured";
       return { authenticated: false, error: "NOVA_API_KEY is not set." };
@@ -28945,10 +29002,10 @@ var NovaClient = class {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await this.fetchFn(`${this.baseUrl}/me`, {
+      const res = await this.fetchFn(`${this.getBaseUrl()}/me`, {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${key}`,
           Accept: "application/json"
         },
         signal: controller.signal
@@ -28983,7 +29040,8 @@ var NovaClient = class {
       if (path2.includes("settlements") && this.fixtureData.settlements) return this.fixtureData.settlements;
       return [];
     }
-    if (!this.apiKey) {
+    const key = this.getApiKey();
+    if (!key) {
       throw new NovaClientError(
         "NOVA_API_KEY is not configured on this server. Provider authentication requires a valid key.",
         "CREDENTIAL_REQUIRED",
@@ -29002,7 +29060,7 @@ var NovaClient = class {
         limit: String(limit),
         offset: String(offset)
       });
-      const url = `${this.baseUrl}${path2.startsWith("/") ? path2 : `/${path2}`}?${queryParams.toString()}`;
+      const url = `${this.getBaseUrl()}${path2.startsWith("/") ? path2 : `/${path2}`}?${queryParams.toString()}`;
       let attempts = 0;
       let success = false;
       let lastErr = null;
@@ -29014,7 +29072,7 @@ var NovaClient = class {
           const res = await this.fetchFn(url, {
             method: "GET",
             headers: {
-              Authorization: `Bearer ${this.apiKey}`,
+              Authorization: `Bearer ${key}`,
               Accept: "application/json"
             },
             signal: controller.signal

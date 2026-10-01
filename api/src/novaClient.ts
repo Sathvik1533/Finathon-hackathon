@@ -133,10 +133,26 @@ export class NovaClient {
   }
 
 
+  public getApiKey(): string {
+    return (this.apiKey || process.env.NOVA_API_KEY || config.novaApiKey || '').trim();
+  }
+
+  public getBaseUrl(): string {
+    let url = (this.baseUrl || process.env.NOVA_BASE_URL || config.novaBaseUrl || 'https://www.aczen.in/nova-api/v1').trim();
+    if (url.includes('aczen.in') && !url.includes('www.aczen.in')) {
+      url = url.replace('aczen.in', 'www.aczen.in');
+    }
+    return url.replace(/\/$/, '');
+  }
+
   public getStatus(): NovaStatus {
+    const key = this.getApiKey();
+    const isConfigured = Boolean(key && key.length > 0) || this.lastStatus.mode === 'test_fixture';
     return {
       ...this.lastStatus,
-      configured: Boolean(this.apiKey && this.apiKey.trim().length > 0) || this.lastStatus.mode === 'test_fixture',
+      baseUrl: this.getBaseUrl(),
+      configured: isConfigured,
+      mode: isConfigured ? (this.lastStatus.authenticated ? 'live_authenticated' : 'reachable_unauthenticated') : 'unconfigured',
     };
   }
 
@@ -153,7 +169,7 @@ export class NovaClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await this.fetchFn(`${this.baseUrl}/health`, {
+      const res = await this.fetchFn(`${this.getBaseUrl()}/health`, {
         method: 'GET',
         headers: { Accept: 'application/json' },
         signal: controller.signal,
@@ -179,7 +195,8 @@ export class NovaClient {
       this.lastStatus.datasetSlice = 'synthetic_test_slice';
       return { authenticated: true, teamSlot: 'fixture_test_slot', datasetSlice: 'synthetic_test_slice' };
     }
-    if (!this.apiKey) {
+    const key = this.getApiKey();
+    if (!key) {
       this.lastStatus.authenticated = false;
       this.lastStatus.mode = 'unconfigured';
       return { authenticated: false, error: 'NOVA_API_KEY is not set.' };
@@ -188,10 +205,10 @@ export class NovaClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await this.fetchFn(`${this.baseUrl}/me`, {
+      const res = await this.fetchFn(`${this.getBaseUrl()}/me`, {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${this.apiKey}`,
+          Authorization: `Bearer ${key}`,
           Accept: 'application/json',
         },
         signal: controller.signal,
@@ -229,7 +246,8 @@ export class NovaClient {
       return [];
     }
 
-    if (!this.apiKey) {
+    const key = this.getApiKey();
+    if (!key) {
       throw new NovaClientError(
         'NOVA_API_KEY is not configured on this server. Provider authentication requires a valid key.',
         'CREDENTIAL_REQUIRED',
@@ -251,7 +269,7 @@ export class NovaClient {
         offset: String(offset),
       });
 
-      const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}?${queryParams.toString()}`;
+      const url = `${this.getBaseUrl()}${path.startsWith('/') ? path : `/${path}`}?${queryParams.toString()}`;
 
       let attempts = 0;
       let success = false;
@@ -266,7 +284,7 @@ export class NovaClient {
           const res = await this.fetchFn(url, {
             method: 'GET',
             headers: {
-              Authorization: `Bearer ${this.apiKey}`,
+              Authorization: `Bearer ${key}`,
               Accept: 'application/json',
             },
             signal: controller.signal,

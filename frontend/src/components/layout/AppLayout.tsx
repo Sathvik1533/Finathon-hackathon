@@ -1,29 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
-import { buttonPressProps } from '../../utils/motion';
 import { getNotifications, markNotificationsRead, NotificationItem } from '../../api/notifications';
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/timeline', label: 'Timeline' },
-  { to: '/nova', label: 'Nova Feeds' },
-  { to: '/exceptions', label: 'Exceptions' },
-  { to: '/settlement', label: 'Settlement' },
-  { to: '/report', label: 'Reports' },
-];
-
-const SEARCH_DIRECTORY = [
-  { id: 'ORD-101', type: 'ORDER', title: 'ORD-101 · Aarav Patel', detail: '₹1,000.00 · gw_tx_001 · UTR CMS/NACH/901', status: 'MATCHED', route: '/timeline?order=ORD-101' },
-  { id: 'ORD-102', type: 'ORDER', title: 'ORD-102 · Meera Iyer', detail: '₹2,500.00 · gw_tx_002 · High-Value Clean', status: 'MATCHED', route: '/timeline?order=ORD-102' },
-  { id: 'ORD-103', type: 'EXCEPTION', title: 'ORD-103 · Vikram Malhotra', detail: '₹1,000.00 · FEE_MISMATCH (+₹11.80 leakage)', status: 'FEE_MISMATCH', route: '/exceptions' },
-  { id: 'ORD-104', type: 'EXCEPTION', title: 'ORD-104 · Ananya Roy', detail: '₹800.00 · TIMING_LAG (T+2 In-flight)', status: 'TIMING_LAG', route: '/timeline?order=ORD-104' },
-  { id: 'SETTLE-901', type: 'SETTLEMENT', title: 'SETTLE-901 · 1:N Batch Settlement', detail: '₹4,870.20 · 3 Orders · UTR: CMS/NACH/SETTL/901', status: 'MATCHED', route: '/settlement' },
+const PRIMARY_NAV = [
+  { to: '/dashboard', label: 'Dashboard', icon: 'M3 3h7v7H3V3zm11 0h7v7h-7V3zm-11 11h7v7H3v-7zm11 0h7v7h-7v-7z' },
+  { to: '/timeline', label: 'Timeline', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { to: '/nova', label: 'Source Feeds', icon: 'M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7zm0 4h16M9 4v16' },
+  { to: '/exceptions', label: 'Exceptions Queue', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+  { to: '/settlement', label: '1:N Settlement', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' },
+  { to: '/report', label: 'Recon Reports', icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
 ];
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
@@ -34,7 +24,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  const [isMerchantProfileOpen, setIsMerchantProfileOpen] = useState(false);
+  const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadAlerts, setUnreadAlerts] = useState<number>(0);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState<boolean>(false);
@@ -50,8 +40,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       const data = await getNotifications(user.token);
       setNotifications(data.notifications || []);
       setUnreadAlerts(data.unreadCount || 0);
-    } catch (err) {
-      console.warn('Notifications not yet populated from backend:', err);
+    } catch {
+      // Backend notifications unavailable or unconfigured
     } finally {
       setIsLoadingNotifications(false);
     }
@@ -59,7 +49,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   useEffect(() => {
     loadNotifications();
-    const interval = setInterval(loadNotifications, 20000);
+    const interval = setInterval(loadNotifications, 30000);
     return () => clearInterval(interval);
   }, [user?.token]);
 
@@ -69,8 +59,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       await markNotificationsRead(undefined, user.token);
       setUnreadAlerts(0);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    } catch (err) {
-      console.error('Failed to mark all notifications read:', err);
+    } catch {
+      // ignore
     }
   };
 
@@ -80,12 +70,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         await markNotificationsRead(item.id, user.token);
         setNotifications(prev => prev.map(n => (n.id === item.id ? { ...n, read: true } : n)));
         setUnreadAlerts(prev => Math.max(0, prev - 1));
-      } catch (err) {
-        console.error('Failed to mark notification read:', err);
+      } catch {
+        // ignore
       }
     }
     setIsNotificationsOpen(false);
     navigate(item.target);
+  };
+
+  const handleSignOut = () => {
+    setIsNotificationsOpen(false);
+    setIsMobileMoreOpen(false);
+    logout();
+    navigate('/login', { replace: true });
   };
 
   // Keyboard shortcut Cmd+K or Ctrl+K for search
@@ -97,400 +94,403 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       } else if (e.key === 'Escape') {
         setIsSearchOpen(false);
         setIsNotificationsOpen(false);
-        setIsMerchantProfileOpen(false);
+        setIsMobileMoreOpen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const filteredSearch = SEARCH_DIRECTORY.filter(item =>
-    item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.detail.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleSignOut = () => {
-    setIsMerchantProfileOpen(false);
-    setIsNotificationsOpen(false);
-    logout();
-    navigate('/login', { replace: true });
-  };
-
   return (
-    <div className="min-h-screen bg-[#f4f5f7] py-4 sm:py-6 px-3 sm:px-6 lg:px-8 flex justify-center items-start antialiased text-slate-900 selection:bg-[#006241]/10 selection:text-[#006241]">
-      {/* Outer Rounded Container matching Pinterest layout */}
-      <div className="w-full max-w-[1440px] bg-white rounded-[32px] p-5 sm:p-7 lg:p-8 shadow-card border border-slate-200/70 space-y-6">
-        
-        {/* Top App Header */}
-        <header className="flex flex-col md:flex-row items-center justify-between gap-4 pb-4 border-b border-slate-100 relative">
+    <div className="min-h-screen bg-[#F7F6F2] flex flex-col md:flex-row text-[#17211C]">
+      
+      {/* ============================================================== */}
+      {/* DESKTOP PERSISTENT LEFT NAVIGATION RAIL */}
+      {/* ============================================================== */}
+      <aside className="hidden md:flex w-60 shrink-0 border-r border-[#E5E3DA] bg-[#F7F6F2] flex-col justify-between p-4 sticky top-0 h-screen select-none">
+        <div className="space-y-6">
           
-          {/* Logo & Brand */}
-          <div className="flex items-center gap-3">
-            <motion.div
-              whileHover={{ rotate: 10, scale: 1.05 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-              className="h-10 w-10 rounded-2xl bg-[#006241] flex items-center justify-center text-white font-bold text-base shadow-pill tracking-tight cursor-pointer shrink-0"
+          {/* Brand Mark */}
+          <div className="flex items-center justify-between pb-4 border-b border-[#E5E3DA]">
+            <div
+              className="flex items-center gap-2.5 cursor-pointer"
               onClick={() => navigate('/dashboard')}
             >
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 2a10 10 0 0 1 10 10" />
-                <circle cx="12" cy="12" r="4" fill="white" />
-              </svg>
-            </motion.div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold tracking-tight text-slate-900 cursor-pointer" onClick={() => navigate('/dashboard')}>
-                LedgerSense
-              </span>
-              <span className="hidden sm:inline-flex items-center text-[10px] uppercase font-semibold tracking-wider text-[#006241] bg-[#e6f7ef] px-2.5 py-0.5 rounded-full border border-[#c1ebd5] whitespace-nowrap shrink-0">
-                FIN-11
-              </span>
+              <div className="h-7 w-7 rounded border border-[#17211C] bg-[#17211C] text-[#F7F6F2] flex items-center justify-center font-serif text-sm font-bold">
+                L
+              </div>
+              <div>
+                <span className="font-semibold text-sm tracking-tight text-[#17211C]">LedgerSense</span>
+                <span className="ml-1.5 text-[10px] text-[#7E8C84] font-mono">FIN-11</span>
+              </div>
             </div>
           </div>
 
-          {/* Segmented Navigation Pills with animated indicator */}
-          <nav className="bg-[#f4f5f7] p-1 rounded-full flex items-center gap-1 text-xs font-medium overflow-x-auto max-w-full relative">
-            {NAV_ITEMS.map(item => {
+          {/* Nav Links */}
+          <nav className="space-y-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#7E8C84] px-2.5 mb-2">
+              Workbench
+            </div>
+            {PRIMARY_NAV.map(item => {
               const isActive = location.pathname.startsWith(item.to);
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  className="relative px-4 sm:px-5 py-2 rounded-full whitespace-nowrap z-10 transition-colors"
+                  className={`flex items-center gap-2.5 px-3 py-2 rounded text-xs font-medium transition-colors min-h-[38px] ${
+                    isActive
+                      ? 'bg-white border border-[#E5E3DA] text-[#1B4332] font-semibold shadow-xs'
+                      : 'text-[#526058] hover:text-[#17211C] hover:bg-[#EAE8E0]'
+                  }`}
                 >
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeNavPill"
-                      className="absolute inset-0 bg-[#006241] rounded-full shadow-xs"
-                      transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                    />
-                  )}
-                  <span className={`relative z-10 font-medium ${isActive ? 'text-white font-semibold' : 'text-slate-600 hover:text-slate-900'}`}>
-                    {item.label}
-                  </span>
+                  <svg
+                    className={`w-4 h-4 shrink-0 ${isActive ? 'text-[#1B4332]' : 'text-[#7E8C84]'}`}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                  </svg>
+                  <span>{item.label}</span>
                 </NavLink>
               );
             })}
           </nav>
+        </div>
 
-          {/* Right Action Icons & User Avatar */}
-          <div className="flex items-center gap-2.5 relative">
-            
-            {/* Search Button (Global Command Palette) */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-              title="Search transactions (Cmd+K)"
+        {/* User Info & Sign Out */}
+        <div className="pt-4 border-t border-[#E5E3DA] space-y-3">
+          <div className="px-2.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#7E8C84]">
+              Active Operator
+            </div>
+            <div className="text-xs font-medium text-[#17211C] mt-0.5 truncate">
+              {user?.username || 'Operator'}
+            </div>
+            <div className="text-[11px] font-mono text-[#526058]">
+              Role: {user?.role || 'Reviewer'}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleSignOut}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded border border-[#E5E3DA] bg-white hover:bg-[#FDF2F0] hover:border-[#F2C4BE] text-xs font-medium text-[#526058] hover:text-[#A34338] transition-colors cursor-pointer min-h-[44px]"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* ============================================================== */}
+      {/* MOBILE COMPACT TOP BAR */}
+      {/* ============================================================== */}
+      <header className="md:hidden border-b border-[#E5E3DA] bg-[#F7F6F2] px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+        <div
+          className="flex items-center gap-2 cursor-pointer"
+          onClick={() => navigate('/dashboard')}
+        >
+          <div className="h-6 w-6 rounded border border-[#17211C] bg-[#17211C] text-[#F7F6F2] flex items-center justify-center font-serif text-xs font-bold">
+            L
+          </div>
+          <span className="font-semibold text-xs tracking-tight text-[#17211C]">LedgerSense</span>
+          <span className="text-[10px] text-[#7E8C84] font-mono">FIN-11</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Notifications Button */}
+          <button
+            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            className="h-10 w-10 rounded border border-[#E5E3DA] bg-white flex items-center justify-center text-[#526058] relative cursor-pointer"
+            aria-label="Notifications"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            {unreadAlerts > 0 && (
+              <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[#1B4332]" />
+            )}
+          </button>
+
+          {/* Quick Sign Out */}
+          <button
+            onClick={handleSignOut}
+            className="h-10 px-3 rounded border border-[#E5E3DA] bg-white text-xs font-medium text-[#526058] hover:text-[#A34338] flex items-center gap-1 cursor-pointer"
+          >
+            <span>Exit</span>
+          </button>
+        </div>
+      </header>
+
+      {/* ============================================================== */}
+      {/* MAIN WORK AREA */}
+      {/* ============================================================== */}
+      <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+        
+        {/* Desktop Top Sub-Bar */}
+        <div className="hidden md:flex items-center justify-between px-6 py-3 border-b border-[#E5E3DA] bg-[#F7F6F2]/80 backdrop-blur-xs">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#526058]">Workspace:</span>
+            <span className="text-xs font-medium text-[#17211C]">FIN-11 Operations</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* Search Button */}
+            <button
               onClick={() => setIsSearchOpen(true)}
-              className="h-9 w-9 rounded-full border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded border border-[#E5E3DA] bg-white hover:bg-[#F7F6F2] text-xs text-[#526058] transition-colors cursor-pointer"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-[#7E8C84]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
-            </motion.button>
+              <span>Search orders & UTRs...</span>
+              <kbd className="font-mono text-[10px] text-[#7E8C84] bg-[#F7F6F2] px-1 rounded border border-[#E5E3DA]">⌘K</kbd>
+            </button>
 
-            {/* Notification Bell with Mint Dot & Dropdown */}
+            {/* Notifications Button */}
             <div className="relative">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                title="Reconciliation alerts"
-                onClick={() => {
-                  setIsNotificationsOpen(!isNotificationsOpen);
-                  setIsMerchantProfileOpen(false);
-                }}
-                className={`h-9 w-9 rounded-full border flex items-center justify-center transition-colors relative cursor-pointer ${
-                  isNotificationsOpen ? 'border-[#006241] bg-[#e6f7ef] text-[#006241]' : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                }`}
+              <button
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className="h-8 px-2.5 rounded border border-[#E5E3DA] bg-white hover:bg-[#F7F6F2] text-xs font-medium text-[#526058] flex items-center gap-1.5 cursor-pointer relative"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
+                <span>Alerts</span>
                 {unreadAlerts > 0 && (
-                  <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-[#00c070] ring-2 ring-white" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#1B4332]" />
                 )}
-              </motion.button>
+              </button>
 
               {/* Notifications Dropdown Card */}
               {isNotificationsOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                  className="absolute right-0 top-12 z-50 w-80 sm:w-96 bg-white rounded-3xl p-4 shadow-2xl border border-slate-200 space-y-3"
-                >
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-900">Reconciliation Alerts</span>
-                      {unreadAlerts > 0 ? (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 font-bold border border-rose-200">
-                          {unreadAlerts} Actionable
-                        </span>
-                      ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
-                          All Cleared
-                        </span>
-                      )}
-                    </div>
-                    {unreadAlerts > 0 && (
+                <div className="absolute right-0 top-10 z-50 w-80 bg-white rounded-lg p-4 shadow-sheet border border-[#E5E3DA] space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#E5E3DA]">
+                    <span className="text-xs font-semibold text-[#17211C]">Reconciliation Alerts</span>
+                    {unreadAlerts > 0 ? (
                       <button
                         onClick={handleMarkAllRead}
-                        className="text-[10px] font-semibold text-[#006241] hover:underline cursor-pointer"
+                        className="text-[11px] text-[#1B4332] hover:underline cursor-pointer"
                       >
                         Mark all read
                       </button>
+                    ) : (
+                      <span className="text-[11px] text-[#7E8C84]">All read</span>
                     )}
                   </div>
 
-                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
                     {isLoadingNotifications ? (
-                      <div className="py-6 text-center text-xs text-slate-400">Loading alerts...</div>
+                      <div className="py-4 text-center text-xs text-[#7E8C84]">Loading alerts...</div>
                     ) : notifications.length === 0 ? (
-                      <div className="py-6 text-center text-xs text-slate-400">
-                        No pending alerts. All transactions reconciled.
+                      <div className="py-4 text-center text-xs text-[#7E8C84]">
+                        No notifications. Source streams reconciled.
                       </div>
                     ) : (
                       notifications.map(item => (
                         <div
                           key={item.id}
                           onClick={() => handleNotificationClick(item)}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer space-y-1 ${
+                          className={`p-2.5 rounded border transition-colors cursor-pointer text-xs space-y-1 ${
                             item.read
-                              ? 'bg-slate-50 border-slate-200 text-slate-600 opacity-75'
-                              : item.type === 'FEE_MISMATCH'
-                              ? 'bg-amber-50/80 border-amber-200 hover:bg-amber-100/70'
-                              : 'bg-blue-50/80 border-blue-200 hover:bg-blue-100/70'
+                              ? 'bg-[#F7F6F2] border-[#E5E3DA] text-[#526058]'
+                              : 'bg-white border-[#C8DFD1] text-[#17211C]'
                           }`}
                         >
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold flex items-center gap-1.5 text-slate-900">
-                              <span>{item.type === 'FEE_MISMATCH' ? '⚠️' : '⏳'}</span>
-                              <span>{item.title}</span>
-                              {!item.read && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-[#006241]" />
-                              )}
-                            </span>
-                            {item.amountPaise > 0 && (
-                              <span className="text-[10px] font-mono font-bold text-slate-700">
-                                ₹{(item.amountPaise / 100).toFixed(2)}
-                              </span>
-                            )}
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">{item.title}</span>
+                            {!item.read && <span className="h-1.5 w-1.5 rounded-full bg-[#1B4332]" />}
                           </div>
-                          <p className="text-[11px] text-slate-600 leading-snug">
-                            {item.detail}
-                          </p>
-                          <div className="text-[10px] font-bold text-[#006241] pt-1">
-                            {item.type === 'FEE_MISMATCH' ? 'Review in Exceptions Queue →' : 'Inspect Timeline Trace →'}
-                          </div>
+                          <p className="text-[11px] text-[#526058]">{item.detail}</p>
                         </div>
                       ))
                     )}
                   </div>
-                </motion.div>
+                </div>
               )}
             </div>
-
-            {/* User Profile Avatar with Merchant Details Drawer / Dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMerchantProfileOpen(!isMerchantProfileOpen);
-                  setIsNotificationsOpen(false);
-                }}
-                className="flex items-center gap-2 pl-1 cursor-pointer focus:outline-none"
-              >
-                <div className="h-9 w-9 rounded-full bg-[#006241] border-2 border-white shadow-xs overflow-hidden flex items-center justify-center text-white text-xs font-bold ring-2 ring-emerald-500/20">
-                  {user?.username ? user.username.slice(0, 2).toUpperCase() : 'PS'}
-                </div>
-                <div className="hidden sm:block text-left">
-                  <div className="text-xs font-bold text-slate-800 leading-tight">
-                    {user?.username ? user.username.charAt(0).toUpperCase() + user.username.slice(1) : 'Priya'}
-                  </div>
-                  <div className="text-[10px] text-slate-400 font-mono">Acme Retail ▼</div>
-                </div>
-              </button>
-
-              {/* Merchant Details Popover */}
-              {isMerchantProfileOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.96 }}
-                  className="absolute right-0 top-12 z-50 w-80 bg-white rounded-3xl p-5 shadow-2xl border border-slate-200 space-y-4"
-                >
-                  {/* Merchant Header */}
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                    <div>
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Merchant Account</div>
-                      <div className="text-sm font-bold text-slate-900">Acme Retail India Pvt. Ltd.</div>
-                      <div className="text-[10px] font-mono text-[#006241] font-semibold">MERCH_ACME_INDIA</div>
-                    </div>
-                    <button
-                      onClick={() => setIsMerchantProfileOpen(false)}
-                      className="text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  {/* Merchant Details Grid */}
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50">
-                      <span className="text-slate-500 text-[11px]">GSTIN</span>
-                      <span className="font-mono font-bold text-slate-800 text-[11px]">29ABCDE1234F1Z5</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50">
-                      <span className="text-slate-500 text-[11px]">Settlement Bank</span>
-                      <span className="font-mono font-bold text-slate-800 text-[11px]">HDFC Bank · ****4892</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50">
-                      <span className="text-slate-500 text-[11px]">Clearing Cycle</span>
-                      <span className="font-mono font-bold text-[#006241] text-[11px]">T+2 Daily Net Sweep</span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50">
-                      <span className="text-slate-500 text-[11px]">Current Role</span>
-                      <span className="font-mono font-bold text-slate-800 text-[11px]">
-                        {user?.role ?? 'FINOPS_ADMIN'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2 rounded-xl bg-[#e6f7ef] border border-[#c1ebd5]">
-                      <span className="text-[#006241] text-[11px] font-semibold">Audit Logging</span>
-                      <span className="font-mono text-[#006241] text-[11px] font-bold">● SOC2 Immutable</span>
-                    </div>
-                  </div>
-
-                  {/* Clean 1-Click Sign Out Button (No browser alert) */}
-                  <button
-                    onClick={handleSignOut}
-                    className="w-full py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-2xl text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
-                  >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    <span>Sign Out of LedgerSense</span>
-                  </button>
-                </motion.div>
-              )}
-            </div>
-
-            {/* Direct Header 1-Click Sign Out Button */}
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-              title="Sign out of LedgerSense"
-              onClick={handleSignOut}
-              className="h-9 px-3 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition-colors flex items-center gap-1.5 cursor-pointer ml-1"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              <span className="hidden sm:inline">Sign Out</span>
-            </motion.button>
-
           </div>
+        </div>
 
-        </header>
-
-        {/* Global Search Dialog Modal (Cmd+K) */}
-        <AnimatePresence>
-          {isSearchOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-xl bg-white rounded-3xl p-5 shadow-2xl border border-slate-200 space-y-4"
-              >
-                {/* Search Bar */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <div className="flex items-center gap-2 flex-1">
-                    <svg className="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                    <input
-                      autoFocus
-                      type="text"
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      placeholder="Search Order ID (ORD-101), UTR, or Customer..."
-                      className="w-full text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none"
-                    />
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-500">ESC</span>
-                </div>
-
-                {/* Search Results */}
-                <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
-                  {filteredSearch.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-slate-400">
-                      No matching financial records found for "{searchQuery}"
-                    </div>
-                  ) : (
-                    filteredSearch.map(item => (
-                      <div
-                        key={item.id}
-                        onClick={() => {
-                          setIsSearchOpen(false);
-                          setSearchQuery('');
-                          navigate(item.route);
-                        }}
-                        className="p-3 rounded-2xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition-all flex items-center justify-between cursor-pointer"
-                      >
-                        <div>
-                          <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                            <span>{item.title}</span>
-                            <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                              {item.type}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">{item.detail}</div>
-                        </div>
-                        <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full ${
-                          item.status === 'MATCHED'
-                            ? 'bg-[#e6f7ef] text-[#006241]'
-                            : item.status === 'FEE_MISMATCH'
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-blue-50 text-blue-700'
-                        }`}>
-                          {item.status}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="pt-2 text-[10px] text-slate-400 border-t border-slate-100 flex items-center justify-between">
-                  <span>Press <kbd className="font-mono bg-slate-100 px-1 rounded">ESC</kbd> to close</span>
-                  <span className="font-mono text-[#006241]">5 indexed records</span>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* Dynamic View Body with smooth animated page transitions */}
-        <AnimatePresence mode="wait">
-          <motion.main
-            key={location.pathname}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          >
-            {children}
-          </motion.main>
-        </AnimatePresence>
-
+        {/* Work Area Content */}
+        <main className="p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {children}
+        </main>
       </div>
+
+      {/* ============================================================== */}
+      {/* MOBILE SAFE-AREA BOTTOM NAVIGATION BAR */}
+      {/* ============================================================== */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#F7F6F2] border-t border-[#E5E3DA] flex items-center justify-around h-16 safe-area-pb select-none">
+        <NavLink
+          to="/dashboard"
+          className={({ isActive }) => `flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[10px] font-medium ${
+            isActive ? 'text-[#1B4332] font-semibold' : 'text-[#7E8C84]'
+          }`}
+        >
+          <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M3 3h7v7H3V3zm11 0h7v7h-7V3zm-11 11h7v7H3v-7zm11 0h7v7h-7v-7z" />
+          </svg>
+          <span>Dashboard</span>
+        </NavLink>
+
+        <NavLink
+          to="/timeline"
+          className={({ isActive }) => `flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[10px] font-medium ${
+            isActive ? 'text-[#1B4332] font-semibold' : 'text-[#7E8C84]'
+          }`}
+        >
+          <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span>Timeline</span>
+        </NavLink>
+
+        <NavLink
+          to="/exceptions"
+          className={({ isActive }) => `flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[10px] font-medium ${
+            isActive ? 'text-[#1B4332] font-semibold' : 'text-[#7E8C84]'
+          }`}
+        >
+          <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span>Exceptions</span>
+        </NavLink>
+
+        <NavLink
+          to="/report"
+          className={({ isActive }) => `flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[10px] font-medium ${
+            isActive ? 'text-[#1B4332] font-semibold' : 'text-[#7E8C84]'
+          }`}
+        >
+          <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span>Reports</span>
+        </NavLink>
+
+        <button
+          onClick={() => setIsMobileMoreOpen(true)}
+          className="flex flex-col items-center justify-center min-w-[56px] min-h-[44px] text-[10px] font-medium text-[#7E8C84] cursor-pointer"
+        >
+          <svg className="w-5 h-5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+          <span>More</span>
+        </button>
+      </nav>
+
+      {/* MOBILE MORE SHEET */}
+      {isMobileMoreOpen && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex flex-col justify-end">
+          <div className="bg-white rounded-t-xl p-5 border-t border-[#E5E3DA] space-y-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E5E3DA]">
+              <span className="font-semibold text-sm text-[#17211C]">Workbench Navigation</span>
+              <button
+                onClick={() => setIsMobileMoreOpen(false)}
+                className="text-xs text-[#526058] hover:text-[#17211C] p-1"
+              >
+                Close ✕
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <NavLink
+                to="/nova"
+                onClick={() => setIsMobileMoreOpen(false)}
+                className="flex items-center gap-3 p-3 rounded text-xs font-medium text-[#17211C] hover:bg-[#F7F6F2]"
+              >
+                <svg className="w-4 h-4 text-[#7E8C84]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7C5 4 4 5 4 7zm0 4h16M9 4v16" />
+                </svg>
+                <span>Source Feeds</span>
+              </NavLink>
+
+              <NavLink
+                to="/settlement"
+                onClick={() => setIsMobileMoreOpen(false)}
+                className="flex items-center gap-3 p-3 rounded text-xs font-medium text-[#17211C] hover:bg-[#F7F6F2]"
+              >
+                <svg className="w-4 h-4 text-[#7E8C84]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.75" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <span>1:N Settlement Matcher</span>
+              </NavLink>
+            </div>
+
+            <div className="pt-3 border-t border-[#E5E3DA] space-y-2 text-xs">
+              <div className="text-[11px] text-[#7E8C84]">
+                Signed in as <span className="font-medium text-[#17211C]">{user?.username}</span> ({user?.role})
+              </div>
+              <button
+                onClick={handleSignOut}
+                className="w-full py-2.5 rounded border border-[#F2C4BE] bg-[#FDF2F0] text-[#A34338] font-medium text-xs text-center cursor-pointer min-h-[44px]"
+              >
+                Sign Out of Workspace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SEARCH COMMAND PALETTE (CMD+K) */}
+      {isSearchOpen && (
+        <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg border border-[#E5E3DA] max-w-lg w-full p-4 shadow-sheet space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E3DA]">
+              <div className="flex items-center gap-2 flex-1">
+                <svg className="w-4 h-4 text-[#7E8C84]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Type an order ID or reference code..."
+                  className="w-full text-xs text-[#17211C] placeholder-[#7E8C84] outline-none"
+                />
+              </div>
+              <button
+                onClick={() => setIsSearchOpen(false)}
+                className="text-[11px] font-mono text-[#7E8C84] hover:text-[#17211C]"
+              >
+                ESC
+              </button>
+            </div>
+
+            <div className="py-2 text-xs text-[#526058] space-y-1">
+              <div
+                onClick={() => { setIsSearchOpen(false); navigate('/timeline'); }}
+                className="p-2 rounded hover:bg-[#F7F6F2] cursor-pointer flex items-center justify-between"
+              >
+                <span>Navigate to Timeline Explorer</span>
+                <span className="font-mono text-[10px] text-[#7E8C84]">/timeline</span>
+              </div>
+              <div
+                onClick={() => { setIsSearchOpen(false); navigate('/exceptions'); }}
+                className="p-2 rounded hover:bg-[#F7F6F2] cursor-pointer flex items-center justify-between"
+              >
+                <span>Navigate to Exceptions Queue</span>
+                <span className="font-mono text-[10px] text-[#7E8C84]">/exceptions</span>
+              </div>
+              <div
+                onClick={() => { setIsSearchOpen(false); navigate('/settlement'); }}
+                className="p-2 rounded hover:bg-[#F7F6F2] cursor-pointer flex items-center justify-between"
+              >
+                <span>Navigate to 1:N Settlement Matcher</span>
+                <span className="font-mono text-[10px] text-[#7E8C84]">/settlement</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

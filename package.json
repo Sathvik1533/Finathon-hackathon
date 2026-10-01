@@ -4,7 +4,10 @@
   "private": true,
   "description": "FIN-11 LedgerSense | Dual Cloud Deployment (Vercel/Railway + AWS)",
   "scripts": {
-    "build": "cd api && npm install && npm run build",
+    "build:api": "npm --prefix api ci && npm --prefix api run build",
+    "build:frontend": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "sync:web": "rm -rf web/assets && cp -r frontend/dist/* web/",
+    "build": "npm run build:api && npm run build:frontend && npm run sync:web",
     "start": "cd api && npm start",
     "test": "cd api && npm test"
   },

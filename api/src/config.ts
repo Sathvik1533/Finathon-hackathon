@@ -15,4 +15,8 @@ export const config = {
   s3Bucket: process.env.S3_BUCKET_NAME || 'finathon-ledgersense-artifacts',
   dynamoTable: process.env.DYNAMODB_TABLE_NAME || 'finathon-reconcile-locks',
   bedrockModelId: process.env.BEDROCK_MODEL_ID || 'amazon.nova-pro-v1:0',
+  novaMode: (process.env.NODE_ENV === 'production' && process.env.NOVA_MODE === 'demo')
+    ? 'unconfigured'
+    : (process.env.NOVA_MODE || 'unconfigured'),
 };
+

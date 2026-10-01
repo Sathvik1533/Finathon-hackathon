@@ -1,6 +1,7 @@
 [build]
   publish = "web"
-  command = "cd frontend && npm install && npm run build && cp -r dist/* ../web/"
+  command = "npm run build"
+  functions = "deploy/netlify/functions"
 
 [[redirects]]
   from = "/api/*"
@@ -19,4 +20,3 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Access-Control-Allow-Origin = "*"

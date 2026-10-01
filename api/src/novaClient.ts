@@ -115,14 +115,23 @@ export class NovaClient {
   }
 
   public setFixtureData(data: typeof this.fixtureData) {
+    if (process.env.NODE_ENV === 'production' && data !== null) {
+      throw new Error('Test fixtures are strictly disallowed in NODE_ENV=production');
+    }
     this.fixtureData = data;
     if (data) {
       this.lastStatus.mode = 'test_fixture';
       this.lastStatus.configured = true;
       this.lastStatus.authenticated = true;
       this.lastStatus.reachable = true;
+    } else {
+      this.lastStatus.mode = this.apiKey ? 'reachable_unauthenticated' : 'unconfigured';
+      this.lastStatus.configured = Boolean(this.apiKey && this.apiKey.trim().length > 0);
+      this.lastStatus.authenticated = false;
+      this.lastStatus.reachable = false;
     }
   }
+
 
   public getStatus(): NovaStatus {
     return {

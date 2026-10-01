@@ -8,10 +8,45 @@ import { loginUser, authenticate, AuthenticatedRequest } from './auth';
 import { novaClient } from './novaClient';
 import { reconEngine, DiscrepancyCase } from './reconEngine';
 import { redisCache } from './redis';
+import { setupTestFixtures } from './test_fixtures';
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  'https://finathon-ledgersense-web.vercel.app',
+  'https://finathon-ledgersense-9za50blwk-24r21a05hr-8498s-projects.vercel.app',
+  'https://ledgersense.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:4000',
+  'http://localhost:8080',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:4000',
+];
+const envAllowed = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
+  : [];
+const allAllowedOrigins = new Set([...allowedOrigins, ...envAllowed]);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // allow requests with no origin (curl, server-to-server, same-origin)
+      if (!origin) return callback(null, true);
+      if (
+        allAllowedOrigins.has(origin) ||
+        /^https:\/\/[a-z0-9-]+(\.vercel\.app|\.netlify\.app)$/i.test(origin)
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-request-id'],
+  })
+);
 app.use(express.json());
 
 // Serve static web UI with robust path detection
@@ -96,33 +131,54 @@ export function mapBankTxs(bankTxs: any[]) {
   });
 }
 
-export function mapSettlements(settlements: any[]) {
-  return settlements.map(s => ({
-    ...s,
-    id: s.settlement_id,
-    settlementId: s.settlement_id,
-    utr: s.utr_number,
-    totalGross: s.gross_amount,
-    totalFees: Math.round(s.fee_deductions / 1.18),
-    totalTax: s.fee_deductions - Math.round(s.fee_deductions / 1.18),
-    netAmount: s.net_payout,
-    bankCreditAmount: s.net_payout,
-    variance: 0,
-    status: 'MATCHED',
-    orderCount: s.transaction_count,
-    amount_paise: s.net_payout,
-    childOrders: [
-      { orderId: 'ORD-101', grossPaise: 100000, feePaise: 2000, taxPaise: 360, netPaise: 97640, status: 'MATCHED', stage: 1 },
-      { orderId: 'ORD-102', grossPaise: 250000, feePaise: 5000, taxPaise: 900, netPaise: 244100, status: 'MATCHED', stage: 1 },
-      { orderId: 'ORD-103', grossPaise: 150000, feePaise: 4000, taxPaise: 720, netPaise: 145280, status: 'FEE_MISMATCH', stage: 4 },
-    ],
-  }));
+export function mapSettlements(settlements: any[], bankTxs: any[] = [], gatewayTxs: any[] = []) {
+  return settlements.map(s => {
+    const matchingBank = bankTxs.find((b: any) =>
+      (b.utr_number && s.utr_number && b.utr_number === s.utr_number) ||
+      (b.utr && s.utr_number && b.utr === s.utr_number) ||
+      (b.narration && b.narration.includes(s.settlement_id))
+    );
+    const bankCreditAmount = matchingBank ? (matchingBank.amount ?? matchingBank.amount_paise) : null;
+    const variance = bankCreditAmount !== null ? (s.net_payout - bankCreditAmount) : null;
+    const status = bankCreditAmount === null ? 'UNMATCHED' : (variance === 0 ? 'MATCHED' : 'VARIANCE_DETECTED');
+
+    const matchingGws = gatewayTxs.filter((gw: any) => gw.settlement_id === s.settlement_id);
+    const childOrders = matchingGws.map((gw: any) => ({
+      orderId: gw.order_id || gw.order_ref,
+      grossPaise: gw.amount ?? gw.amount_paise,
+      feePaise: gw.fee ?? gw.fee_paise,
+      taxPaise: gw.tax ?? gw.tax_paise,
+      netPaise: gw.net_amount ?? gw.amount_paise,
+      status: gw.status === 'CAPTURED' ? 'MATCHED' : gw.status,
+      stage: 6,
+    }));
+
+    return {
+      ...s,
+      id: s.settlement_id,
+      settlementId: s.settlement_id,
+      utr: s.utr_number,
+      totalGross: s.gross_amount,
+      totalFees: Math.round(s.fee_deductions / 1.18),
+      totalTax: s.fee_deductions - Math.round(s.fee_deductions / 1.18),
+      netAmount: s.net_payout,
+      bankCreditAmount,
+      variance,
+      status,
+      orderCount: s.transaction_count || childOrders.length,
+      amount_paise: s.net_payout,
+      childOrders,
+    };
+  });
 }
 
 // Seed initial state
 (async function init() {
   try {
     await initDatabaseSchema();
+    if (config.novaMode === 'demo' && process.env.NODE_ENV !== 'production') {
+      setupTestFixtures();
+    }
     const status = novaClient.getStatus();
     if (status.configured) {
       const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
@@ -354,8 +410,21 @@ app.all(['/api/payments', '/payments'], authenticate, async (req: AuthenticatedR
     await persistAuditLog('STREAM_PAYMENTS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} ERP payments`);
     return res.status(201).json({ count: mapped.length, payments: mapped, message: 'Payments successfully ingested into stream' });
   }
-  const rawPayments = await novaClient.fetchPayments();
-  res.json({ count: rawPayments.length, payments: mapPayments(rawPayments) });
+  const status = novaClient.getStatus();
+  if (!status.configured) {
+    return res.status(503).json({
+      error: 'Payments feed unavailable: Nova provider is unconfigured.',
+      code: 'SOURCE_UNAVAILABLE',
+      sourceState: 'unconfigured',
+      blocker: 'NOVA_API_KEY must be configured on this server to ingest live provider payments.',
+    });
+  }
+  try {
+    const rawPayments = await novaClient.fetchPayments();
+    res.json({ count: rawPayments.length, payments: mapPayments(rawPayments) });
+  } catch (err: any) {
+    res.status(err.status || 503).json({ error: 'Failed to fetch payments', code: err.code || 'FEED_ERROR', details: err.message });
+  }
 });
 
 app.all(['/api/gateway-transactions', '/gateway-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
@@ -365,8 +434,21 @@ app.all(['/api/gateway-transactions', '/gateway-transactions'], authenticate, as
     await persistAuditLog('STREAM_GATEWAY_TXNS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} gateway captures`);
     return res.status(201).json({ count: mapped.length, gatewayTransactions: mapped, message: 'Gateway transactions successfully ingested into stream' });
   }
-  const rawGw = await novaClient.fetchGatewayTransactions();
-  res.json({ count: rawGw.length, gatewayTransactions: mapGatewayTxs(rawGw) });
+  const status = novaClient.getStatus();
+  if (!status.configured) {
+    return res.status(503).json({
+      error: 'Gateway feed unavailable: Nova provider is unconfigured.',
+      code: 'SOURCE_UNAVAILABLE',
+      sourceState: 'unconfigured',
+      blocker: 'NOVA_API_KEY must be configured on this server to ingest live gateway transactions.',
+    });
+  }
+  try {
+    const rawGw = await novaClient.fetchGatewayTransactions();
+    res.json({ count: rawGw.length, gatewayTransactions: mapGatewayTxs(rawGw) });
+  } catch (err: any) {
+    res.status(err.status || 503).json({ error: 'Failed to fetch gateway transactions', code: err.code || 'FEED_ERROR', details: err.message });
+  }
 });
 
 app.all(['/api/bank-transactions', '/bank-transactions'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
@@ -376,12 +458,35 @@ app.all(['/api/bank-transactions', '/bank-transactions'], authenticate, async (r
     await persistAuditLog('STREAM_BANK_TXNS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} bank statement credits`);
     return res.status(201).json({ count: mapped.length, bankTransactions: mapped, message: 'Bank transactions successfully ingested into stream' });
   }
-  const rawBank = await novaClient.fetchBankTransactions();
-  res.json({ count: rawBank.length, bankTransactions: mapBankTxs(rawBank) });
+  const status = novaClient.getStatus();
+  if (!status.configured) {
+    return res.status(503).json({
+      error: 'Bank feed unavailable: Nova provider is unconfigured.',
+      code: 'SOURCE_UNAVAILABLE',
+      sourceState: 'unconfigured',
+      blocker: 'NOVA_API_KEY must be configured on this server to ingest live bank statements.',
+    });
+  }
+  try {
+    const rawBank = await novaClient.fetchBankTransactions();
+    res.json({ count: rawBank.length, bankTransactions: mapBankTxs(rawBank) });
+  } catch (err: any) {
+    res.status(err.status || 503).json({ error: 'Failed to fetch bank transactions', code: err.code || 'FEED_ERROR', details: err.message });
+  }
 });
 
 // 4. 7-Stage Reconciliation Run (B6) with Distributed Job Locking & Cache
 app.post('/api/reconcile/run', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const status = novaClient.getStatus();
+  if (!status.configured) {
+    return res.status(503).json({
+      error: 'Reconciliation run blocked: Required source streams are unavailable.',
+      code: 'SOURCE_UNAVAILABLE',
+      sourceState: 'unconfigured',
+      blocker: 'Nova provider streams are unconfigured. Configure NOVA_API_KEY to ingest records before reconciliation.',
+    });
+  }
+
   // Acquire distributed mutex lock to prevent concurrent reconciliation runs
   const lock = await redisCache.acquireLock('reconciliation:run', 30);
   if (!lock.acquired) {
@@ -478,6 +583,15 @@ app.get('/api/reconcile/summary/:runId', authenticate, async (req: Authenticated
 
 // Dynamic Settlement Volume & Velocity analytics for date filtering and bucketed period charts
 app.get('/api/reconcile/analytics', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  const status = novaClient.getStatus();
+  if (!status.configured && !latestRun) {
+    return res.status(503).json({
+      error: 'Analytics unavailable: Source streams are unconfigured.',
+      code: 'SOURCE_UNAVAILABLE',
+      sourceState: 'unconfigured',
+      blocker: 'Configure NOVA_API_KEY to ingest provider records and view settlement analytics.',
+    });
+  }
   await ensureCurrentRun();
   const period = String(req.query.period || 'monthly').toLowerCase();
   const range = String(req.query.range || 'all');
@@ -655,15 +769,32 @@ app.all(['/api/settlements', '/settlements'], authenticate, async (req: Authenti
     await persistAuditLog('STREAM_SETTLEMENTS_INGESTED', req.user?.username || 'system', `Ingested ${mapped.length} settlement batches`);
     return res.status(201).json({ count: mapped.length, settlements: mapped, message: 'Settlements successfully ingested into stream' });
   }
-  const rawSettlements = await novaClient.fetchSettlements();
-  const rawBankTxs = await novaClient.fetchBankTransactions();
-  const settlements = mapSettlements(rawSettlements);
-  const bankTransactions = mapBankTxs(rawBankTxs);
-  res.json({
-    count: settlements.length,
-    settlements,
-    bankTransactions,
-  });
+  const status = novaClient.getStatus();
+  if (!status.configured) {
+    return res.status(503).json({
+      error: 'Settlement feed unavailable: Nova provider is unconfigured.',
+      code: 'SOURCE_UNAVAILABLE',
+      sourceState: 'unconfigured',
+      blocker: 'NOVA_API_KEY must be configured on this server to ingest live settlement batches.',
+    });
+  }
+  try {
+    const [rawSettlements, rawBankTxs, rawGw] = await Promise.all([
+      novaClient.fetchSettlements(),
+      novaClient.fetchBankTransactions(),
+      novaClient.fetchGatewayTransactions(),
+    ]);
+    const bankTransactions = mapBankTxs(rawBankTxs);
+    const gatewayTransactions = mapGatewayTxs(rawGw);
+    const settlements = mapSettlements(rawSettlements, bankTransactions, gatewayTransactions);
+    res.json({
+      count: settlements.length,
+      settlements,
+      bankTransactions,
+    });
+  } catch (err: any) {
+    res.status(err.status || 503).json({ error: 'Failed to fetch settlements', code: err.code || 'FEED_ERROR', details: err.message });
+  }
 });
 
 // 7. Immutable Audit Trail (B2 & DB Core)
@@ -677,12 +808,40 @@ app.get('/api/audit-logs', authenticate, (req: AuthenticatedRequest, res: Respon
 // 8. Reconciliation Report — Module 11: Full FIN-11 Compliance Report
 // Returns a structured, export-ready reconciliation report covering all 11 problem statement modules.
 app.get('/api/report', authenticate, async (req: AuthenticatedRequest, res: Response) => {
-  const [payments, gatewayTxs, bankTxs, settlements] = await Promise.all([
-    novaClient.fetchPayments(),
-    novaClient.fetchGatewayTransactions(),
-    novaClient.fetchBankTransactions(),
-    novaClient.fetchSettlements(),
-  ]);
+  const status = novaClient.getStatus();
+  if (!status.configured && !latestRun) {
+    return res.status(503).json({
+      error: 'Reconciliation report unavailable: No reconciliation run has been executed on verified data.',
+      code: 'SOURCE_UNAVAILABLE',
+      sourceState: 'unconfigured',
+      blocker: 'Configure NOVA_API_KEY to ingest provider records and execute a reconciliation run.',
+    });
+  }
+
+  let rawPayments: any[] = [];
+  let rawGatewayTxs: any[] = [];
+  let rawBankTxs: any[] = [];
+  let rawSettlements: any[] = [];
+
+  if (status.configured) {
+    try {
+      [rawPayments, rawGatewayTxs, rawBankTxs, rawSettlements] = await Promise.all([
+        novaClient.fetchPayments(),
+        novaClient.fetchGatewayTransactions(),
+        novaClient.fetchBankTransactions(),
+        novaClient.fetchSettlements(),
+      ]);
+    } catch (err: any) {
+      if (!latestRun) {
+        return res.status(503).json({ error: 'Report generation failed', details: err.message });
+      }
+    }
+  }
+
+  const payments = mapPayments(rawPayments);
+  const gatewayTxs = mapGatewayTxs(rawGatewayTxs);
+  const bankTxs = mapBankTxs(rawBankTxs);
+  const settlements = mapSettlements(rawSettlements, bankTxs, gatewayTxs);
 
   const run = latestRun || reconEngine.runReconciliation(payments, gatewayTxs, bankTxs, settlements);
 

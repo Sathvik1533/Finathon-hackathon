@@ -4,14 +4,16 @@ const isLocalhost =
   window.location.port !== '4000' &&
   window.location.port !== '';
 
-const queryApi = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('api') : null;
-if (queryApi && typeof window !== 'undefined') {
+// In production, prohibit arbitrary query param / localStorage overrides to prevent token leakage
+const isDev = import.meta.env.DEV;
+const queryApi = (isDev && typeof window !== 'undefined') ? new URLSearchParams(window.location.search).get('api') : null;
+if (isDev && queryApi && typeof window !== 'undefined') {
   localStorage.setItem('FINATHON_API_BASE', queryApi);
 }
 
 export const API_BASE =
-  queryApi ||
-  (typeof window !== 'undefined' && localStorage.getItem('FINATHON_API_BASE')) ||
+  (isDev ? queryApi : null) ||
+  (isDev && typeof window !== 'undefined' ? localStorage.getItem('FINATHON_API_BASE') : null) ||
   import.meta.env.VITE_API_BASE ||
   (isLocalhost ? 'http://localhost:4000' : '');
 

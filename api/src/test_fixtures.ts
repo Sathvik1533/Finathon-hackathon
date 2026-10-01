@@ -22,5 +22,9 @@ export const TEST_FIXTURE_DATA = {
 };
 
 export function setupTestFixtures() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Test fixtures are strictly disallowed in NODE_ENV=production');
+  }
   novaClient.setFixtureData(TEST_FIXTURE_DATA);
 }
+

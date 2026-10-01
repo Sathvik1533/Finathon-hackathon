@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "outputDirectory": "web",
   "cleanUrls": false,
   "rewrites": [
     {
@@ -11,12 +12,8 @@
       "destination": "/api/index.js"
     },
     {
-      "source": "/assets/(.*)",
-      "destination": "/web/assets/$1"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/web/index.html"
+      "destination": "/index.html"
     }
   ]
 }

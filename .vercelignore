@@ -1,0 +1,17 @@
+api/src
+api/dist
+api/test*
+ai
+infra
+docs
+scripts
+tests
+populate.py
+requirements.txt
+requirements-dev.txt
+Dockerfile
+Makefile
+railway.json
+render.yaml
+Procfile
+nixpacks.toml

@@ -19,8 +19,8 @@ export const LoginPage: React.FC = () => {
       await login(username, password);
       navigate('/dashboard');
     } catch (err: any) {
-      if (err.message && err.message.toLowerCase().includes('failed to fetch')) {
-        setError('Backend service is unreachable. Verify that the LedgerSense API server is running.');
+      if (err.message && (err.message.toLowerCase().includes('unavailable') || err.message.toLowerCase().includes('failed to fetch') || err.message.toLowerCase().includes('unreachable'))) {
+        setError('Authentication service unavailable');
       } else {
         setError(err instanceof Error ? err.message : 'Invalid credentials. Please verify your username and password.');
       }

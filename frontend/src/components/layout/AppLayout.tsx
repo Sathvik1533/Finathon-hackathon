@@ -55,12 +55,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const handleMarkAllRead = async () => {
     if (!user?.token) return;
+    setUnreadAlerts(0);
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     try {
       await markNotificationsRead(undefined, user.token);
-      setUnreadAlerts(0);
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     } catch {
       // ignore
+    }
+  };
+
+  const handleToggleNotifications = () => {
+    const nextState = !isNotificationsOpen;
+    setIsNotificationsOpen(nextState);
+    if (nextState && unreadAlerts > 0) {
+      handleMarkAllRead();
     }
   };
 
@@ -204,7 +212,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <div className="flex items-center gap-2">
           {/* Notifications Button */}
           <button
-            onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            onClick={handleToggleNotifications}
             className="h-10 w-10 rounded border border-[#E5E3DA] bg-white flex items-center justify-center text-[#526058] relative cursor-pointer"
             aria-label="Notifications"
           >
@@ -254,7 +262,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             {/* Notifications Button */}
             <div className="relative">
               <button
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                onClick={handleToggleNotifications}
                 className="h-8 px-2.5 rounded border border-[#E5E3DA] bg-white hover:bg-[#F7F6F2] text-xs font-medium text-[#526058] flex items-center gap-1.5 cursor-pointer relative"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

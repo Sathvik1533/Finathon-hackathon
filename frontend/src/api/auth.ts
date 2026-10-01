@@ -1,4 +1,4 @@
-import { API_BASE } from './headers';
+import { API_BASE, authHeader } from './headers';
 
 export interface LoginResponse {
   token: string;
@@ -13,55 +13,59 @@ export async function login(username: string, password: string): Promise<LoginRe
     throw new Error('Username and password are required.');
   }
 
-  // 1. First attempt authenticated backend request to /api/auth/login
+  let response: Response;
   try {
-    const response = await fetch(`${API_BASE}/api/auth/login`, {
+    response = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: cleanUser, password: cleanPass }),
     });
-
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      const data = await response.json();
-      if (response.ok && data && data.token) {
-        return data;
-      }
-      if (!response.ok && data && data.error) {
-        // If server explicitly rejected password for known user
-        if (cleanUser === 'admin' && cleanPass !== 'admin123') {
-          throw new Error(data.error);
-        }
-      }
-    }
   } catch (err: any) {
-    // If it's a specific credential error thrown from above, propagate it
-    if (err.message && err.message.includes('Invalid password')) {
-      throw err;
-    }
-    console.warn('[Auth] Remote login server returned non-JSON or unreachable; evaluating operator session.');
+    throw new Error('Authentication service unavailable');
   }
 
-  // 2. Resilient session creation for static CDN edge deployments (Vercel / Netlify static hosting)
-  // Supports admin, reviewer, and corporate/personal operator emails (e.g. nandithat3@gmail.com)
-  if (
-    (cleanUser === 'admin' && (cleanPass === 'admin123' || cleanPass.length >= 4)) ||
-    (cleanUser === 'reviewer' && (cleanPass === 'reviewer123' || cleanPass.length >= 4)) ||
-    (cleanUser.includes('@') && cleanPass.length >= 3) ||
-    cleanPass.length >= 4
-  ) {
-    const role = cleanUser.toLowerCase().includes('rev') ? 'reviewer' : 'admin';
-    const token = `jwt-session-${btoa(encodeURIComponent(cleanUser))}-${Date.now()}`;
-    return {
-      token,
-      user: {
-        username: cleanUser,
-        role,
-        userId: `u_${cleanUser.replace(/[^a-zA-Z0-9]/g, '_')}`,
-        merchantId: 'm_demo_finathon',
-      },
-    };
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    throw new Error('Authentication service unavailable');
   }
 
-  throw new Error('Invalid credentials. Please enter a valid email or operator account (admin / admin123).');
+  let data: any;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error('Authentication service unavailable');
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.error || data?.message || 'Invalid username or password.');
+  }
+
+  if (!data || !data.token) {
+    throw new Error('Authentication failed: Missing token in response.');
+  }
+
+  return data;
+}
+
+export async function logout(token?: string): Promise<void> {
+  if (!token) return;
+  try {
+    await fetch(`${API_BASE}/api/auth/logout`, {
+      method: 'POST',
+      headers: authHeader(token),
+    });
+  } catch {
+    // ignore network errors during logout
+  }
+}
+
+export async function getMe(token: string): Promise<{ user: any }> {
+  const res = await fetch(`${API_BASE}/api/auth/me`, {
+    method: 'GET',
+    headers: authHeader(token),
+  });
+  if (!res.ok) {
+    throw new Error('Session invalid or expired');
+  }
+  return res.json();
 }

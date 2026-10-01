@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-export const config = {
+const serverConfig = {
   port: parseInt(process.env.PORT || '4000', 10),
   jwtSecret: process.env.JWT_SECRET || 'finathon-secret-jwt-key-2026',
   databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:Sathvik1533v@localhost:5432/postgres',
@@ -19,4 +19,6 @@ export const config = {
     ? 'unconfigured'
     : (process.env.NOVA_MODE || 'unconfigured'),
 };
+
+export const config = serverConfig;
 

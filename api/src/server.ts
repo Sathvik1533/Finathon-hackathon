@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 import { config } from './config';
 import { checkDbHealth, initDatabaseSchema, persistReconRun, persistDecision, persistAuditLog } from './db';
-import { loginUser, authenticate, AuthenticatedRequest } from './auth';
+import { loginUser, authenticate, AuthenticatedRequest, revokeToken } from './auth';
 import { novaClient } from './novaClient';
 import { reconEngine, DiscrepancyCase } from './reconEngine';
 import { redisCache } from './redis';
@@ -48,6 +48,17 @@ app.use(
   })
 );
 app.use(express.json());
+
+// Normalize request URL for Vercel Serverless Function rewrites
+app.use((req: Request, res: Response, next) => {
+  const matchedPath = (req.headers['x-matched-path'] as string) || (req.headers['x-forwarded-uri'] as string);
+  if (matchedPath && (matchedPath.startsWith('/api') || matchedPath === '/health')) {
+    req.url = matchedPath;
+  } else if (req.url.startsWith('/api/index.js')) {
+    req.url = matchedPath || req.url.replace('/api/index.js', '/api');
+  }
+  next();
+});
 
 // Serve static web UI with robust path detection
 const candidateWebPaths = [
@@ -315,6 +326,24 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
 app.get('/api/auth/me', authenticate, (req: AuthenticatedRequest, res: Response) => {
   res.json({ user: req.user });
+});
+
+app.post('/api/auth/logout', (req: Request, res: Response) => {
+  const authHeader = req.headers.authorization;
+  let token: string | undefined;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  }
+  if (token) {
+    revokeToken(token);
+  }
+  const user = (req as AuthenticatedRequest).user?.username || 'operator';
+  auditLogs.unshift(createAuditRecord({
+    action: 'USER_LOGOUT',
+    user,
+    role: 'FINOPS_ADMIN',
+  }));
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 // 3. Nova Accounting API Feeds (B12: 4-Source Real Ingestion)
@@ -950,10 +979,10 @@ app.get('/api/report', authenticate, async (req: AuthenticatedRequest, res: Resp
 
 // Single Page Application fallback for static web routes
 app.use((req: Request, res: Response, next) => {
-  if (req.method !== 'GET') {
-    return next();
-  }
   if (req.path.startsWith('/api') || req.path === '/health') {
+    return res.status(404).json({ error: 'Endpoint not found', path: req.path });
+  }
+  if (req.method !== 'GET') {
     return next();
   }
   const indexPath = path.join(webDistPath, 'index.html');
@@ -961,6 +990,14 @@ app.use((req: Request, res: Response, next) => {
     return res.sendFile(indexPath);
   }
   next();
+});
+
+// Catch-all for remaining unhandled requests
+app.use((req: Request, res: Response) => {
+  if (req.path.startsWith('/api') || req.path === '/health') {
+    return res.status(404).json({ error: 'Endpoint not found', path: req.path });
+  }
+  res.status(404).send('Not found');
 });
 
 export default app;

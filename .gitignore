@@ -60,3 +60,5 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 .netlify/
+.vercel/
+.vercel_python_packages/

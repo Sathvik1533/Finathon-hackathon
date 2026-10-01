@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 import net from 'net';
 import app from './server';
 import { loginUser, generateToken } from './auth';
@@ -5,8 +6,6 @@ import { reconEngine } from './reconEngine';
 import { closePool } from './db';
 import { redisCache, MinimalRedisClient, RedisCacheService } from './redis';
 import { setupTestFixtures } from './test_fixtures';
-
-process.env.NODE_ENV = 'test';
 
 function createMockResponse(onEnd: (status: number, data: any) => void) {
   let statusCode = 200;

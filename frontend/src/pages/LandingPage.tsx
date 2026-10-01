@@ -68,7 +68,7 @@ export const LandingPage: React.FC = () => {
               onClick={() => navigate(user ? '/dashboard' : '/login')}
               className="w-full sm:w-auto px-6 py-3 bg-[#1B4332] hover:bg-[#143225] text-white text-sm font-medium rounded transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
-              <span>{user ? 'Go to Workbench' : 'Sign In to Operations Workspace'}</span>
+              <span>{user ? 'Go to Workbench' : 'Sign in to LedgerSense'}</span>
               <span>→</span>
             </button>
             <span className="text-xs text-[#7E8C84]">

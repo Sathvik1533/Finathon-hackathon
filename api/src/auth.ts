@@ -14,6 +14,9 @@ export interface AuthenticatedRequest extends Request {
 }
 
 export function generateToken(user: AuthUser): string {
+  if (!config.jwtSecret) {
+    throw new Error('JWT_SECRET is not configured on this server');
+  }
   return jwt.sign(user, config.jwtSecret, { expiresIn: '24h' });
 }
 
@@ -47,6 +50,11 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
     return;
   }
 
+  if (!config.jwtSecret) {
+    res.status(401).json({ error: 'Server authentication configuration is invalid or missing JWT_SECRET.' });
+    return;
+  }
+
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as AuthUser;
     req.user = decoded;
@@ -71,28 +79,32 @@ export function loginUser(username: string, password: string): { success: boolea
     return { success: false, message: 'Username and password are required.' };
   }
 
+  if (!config.jwtSecret) {
+    return { success: false, message: 'Authentication service unavailable: JWT_SECRET not configured.' };
+  }
+
   // Configured user accounts repository
-  const operatorPassword = process.env.OPERATOR_PASSWORD || config.adminPassword || 'admin123';
+  const operatorPassword = process.env.OPERATOR_PASSWORD || config.adminPassword;
   const customOperators = process.env.AUTHORIZED_OPERATORS
     ? process.env.AUTHORIZED_OPERATORS.split(',').map(s => s.trim().toLowerCase())
     : [];
 
   const configuredAccounts: ConfiguredAccount[] = [
     {
-      usernames: ['admin', 'admin@acme.com', 'admin@ledgersense.io'],
+      usernames: [config.adminUsername || 'admin', 'admin@acme.com', 'admin@ledgersense.io'].filter(Boolean),
       password: () => config.adminPassword,
       role: 'admin',
       userId: 'u_admin_001',
     },
     {
       usernames: ['reviewer', 'reviewer@acme.com'],
-      password: () => process.env.REVIEWER_PASSWORD || 'reviewer123',
+      password: () => process.env.REVIEWER_PASSWORD || (process.env.NODE_ENV === 'test' ? 'reviewer123' : ''),
       role: 'reviewer',
       userId: 'u_rev_002',
     },
     {
       usernames: ['auditor', 'auditor@acme.com'],
-      password: () => process.env.AUDITOR_PASSWORD || 'auditor123',
+      password: () => process.env.AUDITOR_PASSWORD || (process.env.NODE_ENV === 'test' ? 'auditor123' : ''),
       role: 'auditor',
       userId: 'u_aud_003',
     },
@@ -109,7 +121,7 @@ export function loginUser(username: string, password: string): { success: boolea
   ];
 
   // In non-production test/demo mode, allow explicit test account
-  if (process.env.NODE_ENV !== 'production' || process.env.DEMO_MODE === 'true') {
+  if (process.env.NODE_ENV === 'test' || (process.env.NODE_ENV !== 'production' && process.env.DEMO_MODE === 'true')) {
     configuredAccounts.push({
       usernames: ['demo', 'demo@acme.com'],
       password: () => 'demo123',
@@ -126,7 +138,8 @@ export function loginUser(username: string, password: string): { success: boolea
     return { success: false, message: 'Invalid username or password.' };
   }
 
-  if (cleanPass !== matchedAccount.password()) {
+  const expectedPass = matchedAccount.password();
+  if (!expectedPass || cleanPass !== expectedPass) {
     return { success: false, message: 'Invalid username or password.' };
   }
 

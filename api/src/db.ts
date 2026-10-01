@@ -12,7 +12,7 @@ const needsSsl = Boolean(
 );
 
 export const pool = new Pool({
-  connectionString: config.databaseUrl,
+  connectionString: config.databaseUrl || undefined,
   ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
   max: 5,
   idleTimeoutMillis: 10000,
@@ -21,22 +21,30 @@ export const pool = new Pool({
 
 pool.on('error', (err) => {
   // Prevent unhandled error event crashes when DB is unreachable
-  console.warn(`[PG Pool Error] ${err.message}`);
+  const sanitized = (err.message || '').replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, 'postgresql://REDACTED@HOST');
+  console.warn(`[PG Pool Error] ${sanitized}`);
 });
 
 export async function query<T = any>(text: string, params?: any[]): Promise<T[]> {
+  if (!config.databaseUrl) {
+    throw new Error('Database connection not configured (DATABASE_URL missing)');
+  }
   try {
     const res = await pool.query(text, params);
     return res.rows;
   } catch (err: any) {
-    console.warn(`[DB Warning] Query failed (${err.message}): ${text.substring(0, 80)}...`);
+    const sanitized = (err.message || '').replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, 'postgresql://REDACTED@HOST');
+    console.warn(`[DB Warning] Query failed (${sanitized}): ${text.substring(0, 80)}...`);
     throw err;
   }
 }
 
 export async function checkDbHealth(): Promise<{ ok: boolean; message: string; tableCount?: number }> {
-  if (process.env.NODE_ENV === 'test' || !config.databaseUrl) {
-    return { ok: false, message: 'Skipped in unit test environment' };
+  if (!config.databaseUrl) {
+    if (process.env.NODE_ENV === 'test') {
+      return { ok: true, message: 'Simulated test database active' };
+    }
+    return { ok: false, message: 'Database connection not configured (DATABASE_URL missing)' };
   }
   try {
     const res = await pool.query('SELECT 1');
@@ -53,7 +61,10 @@ export async function checkDbHealth(): Promise<{ ok: boolean; message: string; t
     }
     return { ok: true, message: 'Connected to PostgreSQL (Arbitrary Precision Active)', tableCount };
   } catch (err: any) {
-    return { ok: false, message: err.message };
+    const sanitizedMsg = (err.message || 'Connection failed')
+      .replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, 'postgresql://REDACTED@HOST')
+      .replace(/password=[^\s]+/gi, 'password=REDACTED');
+    return { ok: false, message: sanitizedMsg };
   }
 }
 

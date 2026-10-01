@@ -1,8 +1,7 @@
+process.env.NODE_ENV = 'test';
 import app from './server';
 import { generateToken } from './auth';
 import { setupTestFixtures } from './test_fixtures';
-
-process.env.NODE_ENV = 'test';
 
 function callRoute(req: { method: string; url: string; headers?: Record<string, string>; body?: any }): Promise<{ status: number; data: any }> {
   return new Promise((resolve) => {

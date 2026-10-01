@@ -18,8 +18,8 @@ if ! command -v railway >/dev/null 2>&1; then
   echo "2. Select 'Deploy from GitHub repo' -> Sathvik1533/Finathon-hackathon"
   echo "3. Add Redis: '+ New' -> 'Database' -> 'Add Redis'"
   echo "4. Add environment variables:"
-  echo "   - DATABASE_URL=postgresql://postgres:Sathvik1533v@db.lhxxsnxoirjbswdqzpyt.supabase.co:5432/postgres"
-  echo "   - JWT_SECRET=finathon-secret-jwt-key-2026"
+  echo "   - DATABASE_URL=postgresql://postgres:[PASSWORD]@[HOST]:5432/postgres"
+  echo "   - JWT_SECRET=[SECURE_JWT_SECRET]"
   echo "   - PORT=4000"
   exit 0
 fi

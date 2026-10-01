@@ -29,7 +29,7 @@ Railway provides the fastest path to a live public HTTPS URL with Redis and Node
 2. Railway instantly spins up Redis and exposes `REDIS_URL`.
 3. In your API service settings ➔ **Variables**, ensure:
    - `PORT`: `4000`
-   - `JWT_SECRET`: `finathon-secret-jwt-key-2026`
+   - `JWT_SECRET`: `[GENERATE_SECURE_JWT_SECRET]`
    - `DATABASE_URL`: Your Supabase connection string (or leave empty to run in-memory)
    - `REDIS_URL`: `${{Redis.REDIS_URL}}` (or select from Railway auto-complete)
 
@@ -123,7 +123,7 @@ During the hackathon evaluation, present our production stack topology:
 |---|---|---|---|
 | `PORT` | Optional | `4000` (or `10000` on Render) | HTTP server port |
 | `NODE_ENV` | Optional | `production` | Node environment |
-| `JWT_SECRET` | Recommended | `finathon-secret-jwt-key-2026` | Secret key for JWT session tokens |
+| `JWT_SECRET` | Recommended | `[GENERATE_SECURE_JWT_SECRET]` | Secret key for JWT session tokens |
 | `DATABASE_URL` | Optional | `postgresql://user:pass@host:5432/db` | Supabase or PostgreSQL connection string |
 | `REDIS_URL` | Optional | `redis://default:pass@host:6379` | Redis connection URL (graceful in-memory fallback if absent) |
 | `NOVA_API_KEY` | Optional | `nova_sk_live_demo` | Nova partner API key |

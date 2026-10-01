@@ -101,6 +101,10 @@ export async function getReconcileAnalytics(
 export async function getHealth(token?: string): Promise<any> {
   const headers = token ? authHeader(token) : { 'Content-Type': 'application/json' };
   const res = await fetch(`${API_BASE}/api/health`, { headers });
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return res.json();
+  }
   if (!res.ok) {
     throw new Error(`Failed to fetch health status: HTTP ${res.status}`);
   }

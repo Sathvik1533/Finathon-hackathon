@@ -28535,14 +28535,16 @@ var import_path = __toESM(require("path"));
 // api/src/config.ts
 var import_dotenv = __toESM(require_dist5());
 import_dotenv.default.config();
+var isProduction = process.env.NODE_ENV === "production";
+var isTest = process.env.NODE_ENV === "test";
 var serverConfig = {
   port: parseInt(process.env.PORT || "4000", 10),
-  jwtSecret: process.env.JWT_SECRET || "finathon-secret-jwt-key-2026",
-  databaseUrl: process.env.DATABASE_URL || "postgresql://postgres:Sathvik1533v@localhost:5432/postgres",
+  jwtSecret: process.env.JWT_SECRET || (isTest ? "test-mode-only-secret" : ""),
+  databaseUrl: process.env.DATABASE_URL || "",
   novaApiKey: process.env.NOVA_API_KEY || "",
   novaBaseUrl: process.env.NOVA_BASE_URL || "https://www.aczen.in/nova-api/v1",
-  adminUsername: process.env.ADMIN_USERNAME || "admin",
-  adminPassword: process.env.ADMIN_PASSWORD || "admin123",
+  adminUsername: process.env.ADMIN_USERNAME || (isProduction ? "" : "admin"),
+  adminPassword: process.env.ADMIN_PASSWORD || (isTest ? "admin123" : ""),
   demoMerchantId: process.env.DEMO_MERCHANT_ID || "m_demo_finathon",
   redisUrl: process.env.REDIS_URL || process.env.REDIS_PRIVATE_URL || process.env.REDISCLOUD_URL || "",
   awsRegion: process.env.AWS_REGION || "us-east-1",
@@ -28559,18 +28561,22 @@ var needsSsl = Boolean(
   config.databaseUrl && (config.databaseUrl.includes("supabase.co") || config.databaseUrl.includes("rds.amazonaws.com") || config.databaseUrl.includes("railway.app") || config.databaseUrl.includes("sslmode=require") || process.env.PGSSLMODE === "require")
 );
 var pool = new import_pg.Pool({
-  connectionString: config.databaseUrl,
+  connectionString: config.databaseUrl || void 0,
   ssl: needsSsl ? { rejectUnauthorized: false } : void 0,
   max: 5,
   idleTimeoutMillis: 1e4,
   connectionTimeoutMillis: 3e3
 });
 pool.on("error", (err) => {
-  console.warn(`[PG Pool Error] ${err.message}`);
+  const sanitized = (err.message || "").replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, "postgresql://REDACTED@HOST");
+  console.warn(`[PG Pool Error] ${sanitized}`);
 });
 async function checkDbHealth() {
-  if (process.env.NODE_ENV === "test" || !config.databaseUrl) {
-    return { ok: false, message: "Skipped in unit test environment" };
+  if (!config.databaseUrl) {
+    if (process.env.NODE_ENV === "test") {
+      return { ok: true, message: "Simulated test database active" };
+    }
+    return { ok: false, message: "Database connection not configured (DATABASE_URL missing)" };
   }
   try {
     const res = await pool.query("SELECT 1");
@@ -28586,7 +28592,8 @@ async function checkDbHealth() {
     }
     return { ok: true, message: "Connected to PostgreSQL (Arbitrary Precision Active)", tableCount };
   } catch (err) {
-    return { ok: false, message: err.message };
+    const sanitizedMsg = (err.message || "Connection failed").replace(/postgres(?:ql)?:\/\/[^\s@]+@[^\s/]+/gi, "postgresql://REDACTED@HOST").replace(/password=[^\s]+/gi, "password=REDACTED");
+    return { ok: false, message: sanitizedMsg };
   }
 }
 async function initDatabaseSchema() {
@@ -28722,6 +28729,9 @@ async function persistAuditLog(action, actor, details, refId) {
 // api/src/auth.ts
 var import_jsonwebtoken = __toESM(require_jsonwebtoken());
 function generateToken(user) {
+  if (!config.jwtSecret) {
+    throw new Error("JWT_SECRET is not configured on this server");
+  }
   return import_jsonwebtoken.default.sign(user, config.jwtSecret, { expiresIn: "24h" });
 }
 var revokedTokens = /* @__PURE__ */ new Set();
@@ -28747,6 +28757,10 @@ function authenticate(req, res, next) {
     res.status(401).json({ error: "Session has been invalidated. Please log in again." });
     return;
   }
+  if (!config.jwtSecret) {
+    res.status(401).json({ error: "Server authentication configuration is invalid or missing JWT_SECRET." });
+    return;
+  }
   try {
     const decoded = import_jsonwebtoken.default.verify(token, config.jwtSecret);
     req.user = decoded;
@@ -28761,24 +28775,27 @@ function loginUser(username, password) {
   if (!cleanUser || !cleanPass) {
     return { success: false, message: "Username and password are required." };
   }
-  const operatorPassword = process.env.OPERATOR_PASSWORD || config.adminPassword || "admin123";
+  if (!config.jwtSecret) {
+    return { success: false, message: "Authentication service unavailable: JWT_SECRET not configured." };
+  }
+  const operatorPassword = process.env.OPERATOR_PASSWORD || config.adminPassword;
   const customOperators = process.env.AUTHORIZED_OPERATORS ? process.env.AUTHORIZED_OPERATORS.split(",").map((s) => s.trim().toLowerCase()) : [];
   const configuredAccounts = [
     {
-      usernames: ["admin", "admin@acme.com", "admin@ledgersense.io"],
+      usernames: [config.adminUsername || "admin", "admin@acme.com", "admin@ledgersense.io"].filter(Boolean),
       password: () => config.adminPassword,
       role: "admin",
       userId: "u_admin_001"
     },
     {
       usernames: ["reviewer", "reviewer@acme.com"],
-      password: () => process.env.REVIEWER_PASSWORD || "reviewer123",
+      password: () => process.env.REVIEWER_PASSWORD || (process.env.NODE_ENV === "test" ? "reviewer123" : ""),
       role: "reviewer",
       userId: "u_rev_002"
     },
     {
       usernames: ["auditor", "auditor@acme.com"],
-      password: () => process.env.AUDITOR_PASSWORD || "auditor123",
+      password: () => process.env.AUDITOR_PASSWORD || (process.env.NODE_ENV === "test" ? "auditor123" : ""),
       role: "auditor",
       userId: "u_aud_003"
     },
@@ -28793,7 +28810,7 @@ function loginUser(username, password) {
       userId: `u_op_${cleanUser.replace(/[^a-z0-9]/g, "_")}`
     }
   ];
-  if (process.env.NODE_ENV !== "production" || process.env.DEMO_MODE === "true") {
+  if (process.env.NODE_ENV === "test" || process.env.NODE_ENV !== "production" && process.env.DEMO_MODE === "true") {
     configuredAccounts.push({
       usernames: ["demo", "demo@acme.com"],
       password: () => "demo123",
@@ -28807,7 +28824,8 @@ function loginUser(username, password) {
   if (!matchedAccount) {
     return { success: false, message: "Invalid username or password." };
   }
-  if (cleanPass !== matchedAccount.password()) {
+  const expectedPass = matchedAccount.password();
+  if (!expectedPass || cleanPass !== expectedPass) {
     return { success: false, message: "Invalid username or password." };
   }
   const user = {
@@ -29950,24 +29968,49 @@ function mapSettlements(settlements, bankTxs = [], gatewayTxs = []) {
 })();
 app.get(["/health", "/api/health"], async (req, res) => {
   const dbHealth = await checkDbHealth();
+  const initialStatus = novaClient.getStatus();
+  if (initialStatus.configured && !initialStatus.authenticated) {
+    try {
+      await novaClient.checkReachability(2e3);
+      await novaClient.checkAuthentication(2e3);
+    } catch {
+    }
+  }
   const novaStatus = novaClient.getStatus();
   const redisStatus = redisCache.getStatus();
   const cachedLatest = await redisCache.getLatestRunSummary();
-  res.json({
-    status: "healthy",
+  const isHealthy = Boolean(dbHealth.ok && novaStatus.configured && novaStatus.authenticated);
+  const httpCode = isHealthy ? 200 : 503;
+  const overallStatus = isHealthy ? "healthy" : "degraded";
+  res.status(httpCode).json({
+    status: overallStatus,
     service: "finathon-api",
     stack: "Node.js + Express + TypeScript + PostgreSQL + Redis",
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-    database: dbHealth,
-    nova: novaStatus,
+    database: {
+      ok: dbHealth.ok,
+      message: dbHealth.message,
+      tableCount: dbHealth.tableCount
+    },
+    nova: {
+      configured: novaStatus.configured,
+      reachable: novaStatus.reachable,
+      authenticated: novaStatus.authenticated,
+      mode: novaStatus.mode,
+      baseUrl: novaStatus.baseUrl,
+      lastChecked: novaStatus.lastChecked,
+      teamSlot: novaStatus.teamSlot,
+      datasetSlice: novaStatus.datasetSlice,
+      error: novaStatus.error || null
+    },
     redis: redisStatus,
     latestRun: cachedLatest || latestRun,
     deployments: {
       frontend: "Vercel (web/index.html via vercel.json)",
-      backend: "Railway / Render (Node.js Express + TypeScript)",
+      backend: "Vercel Serverless Function (/api/index.js)",
       database: "Supabase PostgreSQL (NUMERIC(18,4) + RLS + Audit Triggers)",
-      cache: "Redis (Railway/Upstash with graceful in-memory fallback)",
-      dataStreams: "Aczen Nova Financial API (https://www.aczen.in/nova-api/v1) + JP Morgan Synthetic Data Engine"
+      cache: "Redis with graceful in-memory fallback",
+      dataStreams: "Aczen Nova Financial API (https://www.aczen.in/nova-api/v1)"
     }
   });
 });

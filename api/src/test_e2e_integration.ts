@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 import app, { mapPayments, mapGatewayTxs, mapBankTxs, mapSettlements } from './server';
 import { loginUser, generateToken } from './auth';
 import { reconEngine } from './reconEngine';

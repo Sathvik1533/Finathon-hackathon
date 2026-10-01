@@ -62,10 +62,11 @@ async function runAudit() {
   // 2. Health & Diagnostic API
   console.log(`\n[2/5] Health & Diagnostic Endpoints...`);
   const healthRes = await request('/api/health');
-  assert(healthRes.status === 200, 'GET /api/health returned HTTP 200');
   assert(healthRes.headers['content-type']?.includes('application/json'), 'GET /api/health returned JSON');
   const healthJson = JSON.parse(healthRes.body);
-  assert(healthJson.status === 'healthy', 'Health status is healthy');
+  const expectedStatus = (healthJson.database?.ok && healthJson.nova?.configured && healthJson.nova?.authenticated) ? 200 : 503;
+  assert(healthRes.status === expectedStatus, `GET /api/health returned truthful HTTP ${expectedStatus}`);
+  assert(healthJson.status === (expectedStatus === 200 ? 'healthy' : 'degraded'), `Health status is truthfully ${healthJson.status}`);
   assert(healthJson.nova?.configured === false, 'Nova configured is truthfully false');
   assert(healthJson.nova?.mode === 'unconfigured', 'Nova mode is truthfully unconfigured');
 

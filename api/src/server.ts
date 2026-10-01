@@ -217,27 +217,55 @@ export function mapSettlements(settlements: any[], bankTxs: any[] = [], gatewayT
   }
 })();
 
-// 1. Health checks (B1 requirement)
+// 1. Health checks (Truthful status per FIN-11 specification)
 app.get(['/health', '/api/health'], async (req: Request, res: Response) => {
   const dbHealth = await checkDbHealth();
+  const initialStatus = novaClient.getStatus();
+  if (initialStatus.configured && !initialStatus.authenticated) {
+    try {
+      await novaClient.checkReachability(2000);
+      await novaClient.checkAuthentication(2000);
+    } catch {
+      // ignore
+    }
+  }
   const novaStatus = novaClient.getStatus();
   const redisStatus = redisCache.getStatus();
   const cachedLatest = await redisCache.getLatestRunSummary();
-  res.json({
-    status: 'healthy',
+
+  const isHealthy = Boolean(dbHealth.ok && novaStatus.configured && novaStatus.authenticated);
+  const httpCode = isHealthy ? 200 : 503;
+  const overallStatus = isHealthy ? 'healthy' : 'degraded';
+
+  res.status(httpCode).json({
+    status: overallStatus,
     service: 'finathon-api',
     stack: 'Node.js + Express + TypeScript + PostgreSQL + Redis',
     timestamp: new Date().toISOString(),
-    database: dbHealth,
-    nova: novaStatus,
+    database: {
+      ok: dbHealth.ok,
+      message: dbHealth.message,
+      tableCount: dbHealth.tableCount,
+    },
+    nova: {
+      configured: novaStatus.configured,
+      reachable: novaStatus.reachable,
+      authenticated: novaStatus.authenticated,
+      mode: novaStatus.mode,
+      baseUrl: novaStatus.baseUrl,
+      lastChecked: novaStatus.lastChecked,
+      teamSlot: novaStatus.teamSlot,
+      datasetSlice: novaStatus.datasetSlice,
+      error: novaStatus.error || null,
+    },
     redis: redisStatus,
     latestRun: cachedLatest || latestRun,
     deployments: {
       frontend: 'Vercel (web/index.html via vercel.json)',
-      backend: 'Railway / Render (Node.js Express + TypeScript)',
+      backend: 'Vercel Serverless Function (/api/index.js)',
       database: 'Supabase PostgreSQL (NUMERIC(18,4) + RLS + Audit Triggers)',
-      cache: 'Redis (Railway/Upstash with graceful in-memory fallback)',
-      dataStreams: 'Aczen Nova Financial API (https://www.aczen.in/nova-api/v1) + JP Morgan Synthetic Data Engine',
+      cache: 'Redis with graceful in-memory fallback',
+      dataStreams: 'Aczen Nova Financial API (https://www.aczen.in/nova-api/v1)',
     },
   });
 });

@@ -56,7 +56,7 @@ export const LoginPage: React.FC = () => {
               <span className="font-semibold text-sm tracking-tight text-[#17211C]">LedgerSense</span>
             </div>
             <h1 className="font-editorial text-2xl text-[#17211C] font-normal pt-1">
-              Sign In to Operations Workspace
+              Sign in to LedgerSense
             </h1>
             <p className="text-xs text-[#526058] leading-relaxed">
               Enter authorized operator credentials to access the three-way reconciliation engine, exception queue, and audit logs.
@@ -127,7 +127,7 @@ export const LoginPage: React.FC = () => {
                   <span>Verifying credentials...</span>
                 </>
               ) : (
-                <span>Sign In to Workspace</span>
+                <span>Sign in</span>
               )}
             </button>
           </form>

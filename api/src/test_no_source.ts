@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 import app from './server';
 import { generateToken } from './auth';
 import { novaClient } from './novaClient';

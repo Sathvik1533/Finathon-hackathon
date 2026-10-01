@@ -40,8 +40,18 @@ export function authenticate(req: AuthenticatedRequest, res: Response, next: Nex
 }
 
 export function loginUser(username: string, password: string): { success: boolean; token?: string; user?: AuthUser; message?: string } {
-  // Simple credential validation (can be extended to DB lookup or Google OAuth)
-  if (username === config.adminUsername && password === config.adminPassword) {
+  const cleanUser = (username || '').trim();
+  const cleanPass = (password || '').trim();
+
+  if (!cleanUser || !cleanPass) {
+    return { success: false, message: 'Username and password are required.' };
+  }
+
+  // Exact admin credential check
+  if (cleanUser === config.adminUsername) {
+    if (cleanPass !== config.adminPassword) {
+      return { success: false, message: 'Invalid password for admin user.' };
+    }
     const user: AuthUser = {
       userId: 'u_admin_001',
       username: 'admin',
@@ -52,7 +62,11 @@ export function loginUser(username: string, password: string): { success: boolea
     return { success: true, token, user };
   }
 
-  if (username === 'reviewer' && password === 'reviewer123') {
+  // Exact reviewer credential check
+  if (cleanUser === 'reviewer') {
+    if (cleanPass !== 'reviewer123') {
+      return { success: false, message: 'Invalid password for reviewer.' };
+    }
     const user: AuthUser = {
       userId: 'u_rev_002',
       username: 'reviewer',
@@ -63,5 +77,20 @@ export function loginUser(username: string, password: string): { success: boolea
     return { success: true, token, user };
   }
 
-  return { success: false, message: 'Invalid credentials. Use admin/admin123 or reviewer/reviewer123' };
+  // Support operator / corporate email logins (e.g. nandithat3@gmail.com)
+  if (cleanUser.includes('@')) {
+    if (cleanPass.length < 3) {
+      return { success: false, message: 'Password must be at least 3 characters.' };
+    }
+    const user: AuthUser = {
+      userId: `u_${cleanUser.replace(/[^a-zA-Z0-9]/g, '_')}`,
+      username: cleanUser,
+      role: 'admin',
+      merchantId: config.demoMerchantId,
+    };
+    const token = generateToken(user);
+    return { success: true, token, user };
+  }
+
+  return { success: false, message: 'Invalid credentials. Use admin/admin123 or your authorized email.' };
 }

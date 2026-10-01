@@ -327,13 +327,13 @@ app.get('/api/db/status', async (req: Request, res: Response) => {
 
 // 2. Authentication (B2: Credentials -> JWT)
 app.post('/api/auth/login', (req: Request, res: Response) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    res.status(400).json({ error: 'Username and password required' });
+  const { username, password } = req.body || {};
+  if (!username || !password || !String(username).trim() || !String(password).trim()) {
+    res.status(400).json({ error: 'Username and password are required.' });
     return;
   }
 
-  const result = loginUser(username, password);
+  const result = loginUser(String(username), String(password));
   if (!result.success) {
     res.status(401).json({ error: result.message });
     return;

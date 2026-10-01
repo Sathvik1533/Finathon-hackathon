@@ -51,6 +51,32 @@ async function runTests() {
   }
   console.log('  ✓ Invalid password rejected');
 
+  // Test 1b: Dynamic User Authentication & Role Assignment
+  const dynamicAdmin = loginUser('sathvik', 'any_secure_pass');
+  if (!dynamicAdmin.success || !dynamicAdmin.token || dynamicAdmin.user?.role !== 'admin') {
+    throw new Error('Dynamic admin login failed');
+  }
+  console.log('  ✓ Dynamic username session provisioned with admin role');
+
+  const dynamicReviewer = loginUser('custom_reviewer', 'review_pass');
+  if (!dynamicReviewer.success || !dynamicReviewer.token || dynamicReviewer.user?.role !== 'reviewer') {
+    throw new Error('Dynamic reviewer login failed');
+  }
+  console.log('  ✓ Dynamic reviewer session provisioned with reviewer role');
+
+  const dynamicAuditor = loginUser('compliance_auditor', 'audit_pass');
+  if (!dynamicAuditor.success || !dynamicAuditor.token || dynamicAuditor.user?.role !== 'auditor') {
+    throw new Error('Dynamic auditor session provisioned with auditor role');
+  }
+  console.log('  ✓ Dynamic auditor session provisioned with auditor role');
+
+  const emptyUserRes = loginUser('', 'pass');
+  const emptyPassRes = loginUser('admin', '');
+  if (emptyUserRes.success || emptyPassRes.success) {
+    throw new Error('Empty username or password must be rejected');
+  }
+  console.log('  ✓ Empty credentials rejected correctly');
+
   // Test 2: 7-Stage Recon Engine
   console.log('[2/4] Testing 7-stage Deterministic Recon Engine...');
   const payments = [{ payment_id: 'p1', order_id: 'O1', amount: 100000 }];

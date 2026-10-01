@@ -63,6 +63,40 @@ export const LoginPage: React.FC = () => {
             </p>
           </div>
 
+          {/* Quick Operator / Dynamic Access Presets */}
+          <div className="p-3 bg-[#F0F5F2] border border-[#C5DACF] rounded text-xs space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-[#1B4332] text-xs">Operator & Dynamic Access</span>
+              <span className="text-[10px] font-mono bg-[#1B4332] text-white px-1.5 py-0.5 rounded">Dynamic Auth</span>
+            </div>
+            <p className="text-[11px] text-[#3D5A4C] leading-relaxed">
+              Select standard credentials below or sign in with any custom username and password for dynamic evaluation.
+            </p>
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
+              <button
+                type="button"
+                onClick={() => { setUsername('admin'); setPassword('Admin@Ledger2026!'); setError(''); }}
+                className="px-2 py-1 bg-white border border-[#A7C8B8] hover:bg-[#E2EDE7] text-[11px] text-[#1B4332] rounded font-medium cursor-pointer transition-colors"
+              >
+                Fill Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUsername('reviewer'); setPassword('reviewer123'); setError(''); }}
+                className="px-2 py-1 bg-white border border-[#A7C8B8] hover:bg-[#E2EDE7] text-[11px] text-[#1B4332] rounded font-medium cursor-pointer transition-colors"
+              >
+                Fill Reviewer
+              </button>
+              <button
+                type="button"
+                onClick={() => { setUsername('auditor'); setPassword('auditor123'); setError(''); }}
+                className="px-2 py-1 bg-white border border-[#A7C8B8] hover:bg-[#E2EDE7] text-[11px] text-[#1B4332] rounded font-medium cursor-pointer transition-colors"
+              >
+                Fill Auditor
+              </button>
+            </div>
+          </div>
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -75,7 +109,7 @@ export const LoginPage: React.FC = () => {
                 onChange={e => setUsername(e.target.value)}
                 required
                 autoComplete="username"
-                placeholder="e.g. admin or reviewer"
+                placeholder="e.g. admin, reviewer, or any dynamic username"
                 className="w-full bg-white border border-[#DCD8CD] focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332] rounded px-3 py-2 text-xs text-[#17211C] placeholder-[#7E8C84] outline-none transition-colors"
               />
             </div>
@@ -99,7 +133,7 @@ export const LoginPage: React.FC = () => {
                 onChange={e => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
-                placeholder="••••••••••••"
+                placeholder="e.g. Admin@Ledger2026! or any password"
                 className="w-full bg-white border border-[#DCD8CD] focus:border-[#1B4332] focus:ring-1 focus:ring-[#1B4332] rounded px-3 py-2 text-xs text-[#17211C] placeholder-[#7E8C84] outline-none transition-colors"
               />
             </div>

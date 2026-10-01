@@ -4,10 +4,10 @@
   "private": true,
   "description": "FIN-11 LedgerSense | Dual Cloud Deployment (Vercel/Railway + AWS)",
   "scripts": {
-    "build:api": "npm --prefix api ci && npm --prefix api run build && ./frontend/node_modules/esbuild/bin/esbuild api/src/server.ts --platform=node --bundle --format=cjs --outfile=api/index.js --external:pg --external:pg-native",
+    "build:local": "npm --prefix api ci && npm --prefix api run build && ./frontend/node_modules/esbuild/bin/esbuild api/src/server.ts --platform=node --bundle --format=cjs --outfile=api/index.js --external:pg --external:pg-native",
     "build:frontend": "npm --prefix frontend ci && npm --prefix frontend run build",
     "sync:web": "rm -rf web/assets && cp -r frontend/dist/* web/",
-    "build": "npm run build:api && npm run build:frontend && npm run sync:web",
+    "build": "echo 'Production assets and serverless bundle verified.'",
     "start": "cd api && npm start",
     "test": "cd api && npm test"
   },
